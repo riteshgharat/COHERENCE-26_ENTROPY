@@ -1,0 +1,2 @@
+# COHERENCE-26_ENTROPY
+24hrs Hackathon at VCET
