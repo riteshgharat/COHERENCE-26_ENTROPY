@@ -1,4 +1,4 @@
-import { useCallback, useRef, useMemo, useState } from 'react';
+import { useCallback, useRef, useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ReactFlow,
@@ -41,32 +41,32 @@ import {
   Layers,
   Cpu,
   Send,
+  Loader2,
+  Wand2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import StartNode from '@/components/workflow/nodes/StartNode';
-import EndNode from '@/components/workflow/nodes/EndNode';
-import LeadUploadNode from '@/components/workflow/nodes/LeadUploadNode';
-import AIMessageNode from '@/components/workflow/nodes/AIMessageNode';
-import SendMessageNode from '@/components/workflow/nodes/SendMessageNode';
-import DelayNode from '@/components/workflow/nodes/DelayNode';
-import ReplyCheckNode from '@/components/workflow/nodes/ReplyCheckNode';
-import FollowUpNode from '@/components/workflow/nodes/FollowUpNode';
-import UpdateCRMNode from '@/components/workflow/nodes/UpdateCRMNode';
-import AnalyticsNode from '@/components/workflow/nodes/AnalyticsNode';
-import AIConversationNode from '@/components/workflow/nodes/AIConversationNode';
+import BaseNode from '@/components/workflow/BaseNode';
+import DeletableEdge from '@/components/workflow/DeletableEdge';
+import NodePropertyPanel from '@/components/workflow/NodePropertyPanel';
+import AgenticWorkflowModal from '@/components/workflow/AgenticWorkflowModal';
+import { getDefaultData } from '@/components/workflow/nodeDefinitions';
 
 const nodeTypes = {
-  start: StartNode,
-  end: EndNode,
-  lead_upload: LeadUploadNode,
-  ai_message: AIMessageNode,
-  send_message: SendMessageNode,
-  delay: DelayNode,
-  reply_check: ReplyCheckNode,
-  follow_up: FollowUpNode,
-  update_crm: UpdateCRMNode,
-  analytics: AnalyticsNode,
-  ai_conversation: AIConversationNode,
+  start: BaseNode,
+  end: BaseNode,
+  lead_upload: BaseNode,
+  ai_message: BaseNode,
+  send_message: BaseNode,
+  delay: BaseNode,
+  reply_check: BaseNode,
+  follow_up: BaseNode,
+  update_crm: BaseNode,
+  analytics: BaseNode,
+  ai_conversation: BaseNode,
+};
+
+const edgeTypes = {
+  default: DeletableEdge,
 };
 
 /* ── Grouped toolbox ── */
@@ -125,19 +125,17 @@ const toolGroups: ToolGroup[] = [
   },
 ];
 
-const allItems = toolGroups.flatMap(g => g.items);
-
 const edgeColor = 'oklch(0.4 0 0)';
 
 const defaultNodes: Node[] = [
   { id: '1', type: 'start', position: { x: 400, y: 40 }, data: {} },
-  { id: '2', type: 'lead_upload', position: { x: 370, y: 160 }, data: { label: 'Import Leads' } },
-  { id: '3', type: 'ai_message', position: { x: 360, y: 310 }, data: { label: 'Personalize Intro', prompt: 'Generate a warm intro email' } },
-  { id: '4', type: 'send_message', position: { x: 370, y: 470 }, data: { label: 'Send Intro Email', channel: 'email' } },
-  { id: '5', type: 'delay', position: { x: 390, y: 620 }, data: { label: 'Wait 2 Hours', duration: '2 hours' } },
-  { id: '6', type: 'reply_check', position: { x: 370, y: 770 }, data: { label: 'Got Reply?' } },
-  { id: '7', type: 'follow_up', position: { x: 140, y: 940 }, data: { label: 'Follow Up', attempt: 'Attempt #2' } },
-  { id: '8', type: 'update_crm', position: { x: 560, y: 940 }, data: { label: 'Mark Engaged' } },
+  { id: '2', type: 'lead_upload', position: { x: 370, y: 160 }, data: { label: 'Import Leads', industry: '', status: '' } },
+  { id: '3', type: 'ai_message', position: { x: 360, y: 310 }, data: { label: 'Personalize Intro', tone: 'warm and personal', sample_message: 'Generate a warm intro email', subject: 'Hi {name}, quick intro', provider: 'groq' } },
+  { id: '4', type: 'send_message', position: { x: 370, y: 470 }, data: { label: 'Send Intro Email', channel: 'email', subject: '' } },
+  { id: '5', type: 'delay', position: { x: 390, y: 620 }, data: { label: 'Wait 2 Hours', delay_seconds: 7200 } },
+  { id: '6', type: 'reply_check', position: { x: 370, y: 770 }, data: { label: 'Got Reply?', timeout_hours: 48 } },
+  { id: '7', type: 'follow_up', position: { x: 140, y: 940 }, data: { label: 'Follow Up', tone: 'polite and brief', max_attempts: 2, provider: 'groq' } },
+  { id: '8', type: 'update_crm', position: { x: 560, y: 940 }, data: { label: 'Mark Engaged', spreadsheet_id: '', worksheet_name: 'Sheet1' } },
   { id: '9', type: 'end', position: { x: 400, y: 1100 }, data: {} },
 ];
 
@@ -159,15 +157,36 @@ export default function WorkflowEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const isNew = id === 'new';
+  const isNew = !id || id === 'new';
 
   const [nodes, setNodes, onNodesChange] = useNodesState(isNew ? [] : defaultNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(isNew ? [] : defaultEdges);
-  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedNodeId) || null, [nodes, selectedNodeId]);
   const [workflowName, setWorkflowName] = useState(isNew ? 'Untitled workflow' : 'Cold Outreach — Series A Founders');
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [saved, setSaved] = useState(false);
   const [activeTab, setActiveTab] = useState<'nodes' | 'config'>('nodes');
+  const [running, setRunning] = useState(false);
+  const [showAgenticModal, setShowAgenticModal] = useState(false);
+
+  useEffect(() => {
+    if (!isNew && id && id !== 'new') {
+      fetch(`http://localhost:8000/api/v1/workflows/${id}`)
+        .then((res) => {
+          if (!res.ok) throw new Error('Failed to fetch workflow');
+          return res.json();
+        })
+        .then((data) => {
+          setWorkflowName(data.name || 'Untitled workflow');
+          if (data.flow_data) {
+            setNodes(data.flow_data.nodes || []);
+            setEdges(data.flow_data.edges || []);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [id, isNew, setNodes, setEdges]);
 
   const toggleGroup = (label: string) =>
     setCollapsedGroups((p) => ({ ...p, [label]: !p[label] }));
@@ -189,18 +208,18 @@ export default function WorkflowEditor() {
   );
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-    setSelectedNode(node);
+    setSelectedNodeId(node.id);
     setActiveTab('config');
   }, []);
 
   const onPaneClick = useCallback(() => {
-    setSelectedNode(null);
+    setSelectedNodeId(null);
     setActiveTab('nodes');
   }, []);
 
   const onDragStart = (e: React.DragEvent, item: ToolItem) => {
     e.dataTransfer.setData('application/reactflow-type', item.type);
-    e.dataTransfer.setData('application/reactflow-data', JSON.stringify(item.data || {}));
+    e.dataTransfer.setData('application/reactflow-data', JSON.stringify({ ...(item.data || {}), label: item.label }));
     e.dataTransfer.effectAllowed = 'move';
   };
 
@@ -221,14 +240,12 @@ export default function WorkflowEditor() {
         x: e.clientX - bounds.left - 90,
         y: e.clientY - bounds.top - 30,
       };
+      const defaults = getDefaultData(type);
       const newNode: Node = {
         id: String(nodeIdCounter++),
         type,
         position,
-        data: {
-          label: type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-          ...extraData,
-        },
+        data: { ...defaults, ...extraData },
       };
       setNodes((nds) => [...nds, newNode]);
     },
@@ -236,30 +253,112 @@ export default function WorkflowEditor() {
   );
 
   const deleteNode = useCallback(() => {
-    if (!selectedNode) return;
-    setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id));
-    setEdges((eds) => eds.filter((e) => e.source !== selectedNode.id && e.target !== selectedNode.id));
-    setSelectedNode(null);
+    if (!selectedNodeId) return;
+    setNodes((nds) => nds.filter((n) => n.id !== selectedNodeId));
+    setEdges((eds) => eds.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId));
+    setSelectedNodeId(null);
     setActiveTab('nodes');
-  }, [selectedNode, setNodes, setEdges]);
+  }, [selectedNodeId, setNodes, setEdges]);
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const handleSave = async () => {
+    try {
+      const payload = {
+        name: workflowName,
+        flow_data: { nodes, edges },
+      };
+
+      const endpoint = isNew
+        ? 'http://localhost:8000/api/v1/workflows/'
+        : `http://localhost:8000/api/v1/workflows/${id}`;
+
+      const method = isNew ? 'POST' : 'PATCH';
+
+      await fetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+
+      if (isNew || id === 'new') {
+        // Optional: redirect to list or the new ID. We'll just stay to not break flows.
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const updateNodeData = (key: string, value: string) => {
-    if (!selectedNode) return;
+  const updateNodeData = (key: string, value: any) => {
+    if (!selectedNodeId) return;
     setNodes((nds) =>
-      nds.map((n) => (n.id === selectedNode.id ? { ...n, data: { ...n.data, [key]: value } } : n)),
+      nds.map((n) => (n.id === selectedNodeId ? { ...n, data: { ...n.data, [key]: value } } : n)),
     );
-    setSelectedNode((prev) => prev ? { ...prev, data: { ...prev.data, [key]: value } } : null);
   };
+
+  const handleAgenticGenerate = useCallback(
+    (generatedNodes: Node[], generatedEdges: Edge[], name?: string) => {
+      // Bump the node ID counter past any generated IDs
+      const maxId = generatedNodes.reduce((mx, n) => Math.max(mx, parseInt(n.id, 10) || 0), 0);
+      if (maxId >= nodeIdCounter) nodeIdCounter = maxId + 1;
+      setNodes(generatedNodes);
+      setEdges(generatedEdges);
+      if (name) setWorkflowName(name);
+      setShowAgenticModal(false);
+    },
+    [setNodes, setEdges],
+  );
+
+  const runWorkflow = useCallback(async () => {
+    if (running) return;
+    const startNode = nodes.find((n) => n.type === 'start');
+    if (!startNode) return;
+
+    setRunning(true);
+
+    // Build adjacency list from edges
+    const adj = new Map<string, string[]>();
+    for (const e of edges) {
+      if (!adj.has(e.source)) adj.set(e.source, []);
+      adj.get(e.source)!.push(e.target);
+    }
+
+    const markNode = (nodeId: string, flags: Record<string, boolean>) =>
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.id === nodeId ? { ...n, data: { ...n.data, ...flags } } : n,
+        ),
+      );
+
+    // BFS traversal — sequential with 700ms per node
+    const visited = new Set<string>();
+    let queue = [startNode.id];
+
+    while (queue.length > 0) {
+      const [nodeId, ...rest] = queue;
+      queue = rest;
+      if (visited.has(nodeId)) continue;
+      visited.add(nodeId);
+
+      markNode(nodeId, { _executing: true, _done: false });
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise<void>((r) => setTimeout(r, 700));
+      markNode(nodeId, { _executing: false, _done: true });
+
+      const targets = adj.get(nodeId) || [];
+      queue.push(...targets.filter((t) => !visited.has(t)));
+    }
+
+    // Clear done state after a brief pause
+    await new Promise<void>((r) => setTimeout(r, 1500));
+    setNodes((nds) =>
+      nds.map((n) => ({ ...n, data: { ...n.data, _executing: false, _done: false } })),
+    );
+    setRunning(false);
+  }, [running, nodes, edges, setNodes]);
 
   const rfStyle = useMemo(() => ({ backgroundColor: 'transparent' }), []);
-
-  /* ── helpers ── */
-  const nodeMetaFor = (node: Node) => allItems.find(i => i.type === node.type);
 
   return (
     <div className="h-screen flex flex-col animate-fade-in">
@@ -298,6 +397,17 @@ export default function WorkflowEditor() {
           <Button
             variant="outline"
             size="sm"
+            className="gap-1.5 h-7 text-xs rounded-lg font-medium border-violet-300 text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:border-violet-700 dark:text-violet-400 dark:hover:bg-violet-950"
+            onClick={() => setShowAgenticModal(true)}
+            disabled={running}
+          >
+            <Wand2 size={11} />
+            AI Generate
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
             className="gap-1.5 h-7 text-xs rounded-lg font-medium"
             onClick={handleSave}
           >
@@ -307,8 +417,11 @@ export default function WorkflowEditor() {
             }
           </Button>
 
-          <Button size="sm" className="gap-1.5 h-7 text-xs rounded-lg font-medium">
-            <Play size={11} /> Run
+          <Button size="sm" className="gap-1.5 h-7 text-xs rounded-lg font-medium" onClick={runWorkflow} disabled={running}>
+            {running
+              ? <><Loader2 size={11} className="animate-spin" /> Running...</>
+              : <><Play size={11} /> Run</>
+            }
           </Button>
         </div>
       </div>
@@ -323,21 +436,19 @@ export default function WorkflowEditor() {
           <div className="flex border-b border-border shrink-0">
             <button
               onClick={() => setActiveTab('nodes')}
-              className={`flex-1 text-[11px] font-semibold py-2.5 transition-colors border-b-2 -mb-px ${
-                activeTab === 'nodes'
-                  ? 'border-foreground text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
+              className={`flex-1 text-[11px] font-semibold py-2.5 transition-colors border-b-2 -mb-px ${activeTab === 'nodes'
+                ? 'border-foreground text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
             >
               Library
             </button>
             <button
               onClick={() => setActiveTab('config')}
-              className={`flex-1 text-[11px] font-semibold py-2.5 transition-colors border-b-2 -mb-px ${
-                activeTab === 'config'
-                  ? 'border-foreground text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
+              className={`flex-1 text-[11px] font-semibold py-2.5 transition-colors border-b-2 -mb-px ${activeTab === 'config'
+                ? 'border-foreground text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
             >
               {selectedNode ? 'Config' : 'Properties'}
             </button>
@@ -393,176 +504,12 @@ export default function WorkflowEditor() {
 
           {/* ── Config tab ── */}
           {activeTab === 'config' && (
-            <div className="flex-1 flex flex-col overflow-hidden">
-              {!selectedNode ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-center px-4 py-8">
-                  <div className="h-10 w-10 rounded-xl border border-dashed border-border flex items-center justify-center mb-3">
-                    <Settings2 size={16} className="text-muted-foreground/40" strokeWidth={1.5} />
-                  </div>
-                  <p className="text-[12px] font-medium text-muted-foreground">Select a node</p>
-                  <p className="text-[11px] text-muted-foreground/60 mt-1">Click any node on the canvas to configure it</p>
-                </div>
-              ) : (
-                <>
-                  {/* Node header */}
-                  <div className="px-3 py-3 border-b border-border shrink-0">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        {(() => {
-                          const meta = nodeMetaFor(selectedNode);
-                          if (!meta) return null;
-                          return (
-                            <div className={`h-6 w-6 flex items-center justify-center rounded-md ${meta.color}`}>
-                              <meta.icon size={12} strokeWidth={1.5} />
-                            </div>
-                          );
-                        })()}
-                        <span className="text-[12px] font-bold capitalize">
-                          {selectedNode.type?.replace(/_/g, ' ')}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => { setSelectedNode(null); setActiveTab('nodes'); }}
-                        className="h-5 w-5 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                    <div className="text-[9px] font-mono text-muted-foreground/60 bg-muted px-2 py-0.5 rounded-md w-fit">
-                      id: {selectedNode.id}
-                    </div>
-                  </div>
-
-                  {/* Fields */}
-                  <div className="flex-1 overflow-y-auto p-3 space-y-4">
-
-                    {/* Label */}
-                    {(selectedNode.data as any).label !== undefined && (
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                          Label
-                        </label>
-                        <input
-                          className="w-full bg-background border border-border rounded-lg px-2.5 py-2 text-[12px] font-medium focus:outline-none focus:ring-1 focus:ring-foreground/20 transition-all placeholder:text-muted-foreground/50"
-                          value={(selectedNode.data as any).label || ''}
-                          onChange={(e) => updateNodeData('label', e.target.value)}
-                          placeholder="Node label…"
-                        />
-                      </div>
-                    )}
-
-                    {/* AI Prompt */}
-                    {(selectedNode.data as any).prompt !== undefined && (
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                          AI Prompt
-                        </label>
-                        <textarea
-                          className="w-full bg-background border border-border rounded-lg px-2.5 py-2 text-[12px] focus:outline-none focus:ring-1 focus:ring-foreground/20 transition-all resize-none placeholder:text-muted-foreground/50"
-                          rows={4}
-                          value={(selectedNode.data as any).prompt || ''}
-                          onChange={(e) => updateNodeData('prompt', e.target.value)}
-                          placeholder="Enter AI message prompt…"
-                        />
-                      </div>
-                    )}
-
-                    {/* Channel */}
-                    {(selectedNode.data as any).channel && (
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                          Channel
-                        </label>
-                        <select
-                          className="w-full bg-background border border-border rounded-lg px-2.5 py-2 text-[12px] font-medium focus:outline-none focus:ring-1 focus:ring-foreground/20 transition-all capitalize"
-                          value={(selectedNode.data as any).channel || 'email'}
-                          onChange={(e) => updateNodeData('channel', e.target.value)}
-                        >
-                          <option value="email">Email</option>
-                          <option value="linkedin">LinkedIn</option>
-                          <option value="whatsapp">WhatsApp</option>
-                        </select>
-                      </div>
-                    )}
-
-                    {/* Duration */}
-                    {(selectedNode.data as any).duration !== undefined && (
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                          Duration
-                        </label>
-                        <input
-                          className="w-full bg-background border border-border rounded-lg px-2.5 py-2 text-[12px] font-medium focus:outline-none focus:ring-1 focus:ring-foreground/20 transition-all placeholder:text-muted-foreground/50"
-                          value={(selectedNode.data as any).duration || ''}
-                          onChange={(e) => updateNodeData('duration', e.target.value)}
-                          placeholder="e.g. 2 hours, 1 day"
-                        />
-                      </div>
-                    )}
-
-                    {/* Subject (send_message) */}
-                    {(selectedNode.data as any).subject !== undefined && (
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                          Subject
-                        </label>
-                        <input
-                          className="w-full bg-background border border-border rounded-lg px-2.5 py-2 text-[12px] font-medium focus:outline-none focus:ring-1 focus:ring-foreground/20 transition-all placeholder:text-muted-foreground/50"
-                          value={(selectedNode.data as any).subject || ''}
-                          onChange={(e) => updateNodeData('subject', e.target.value)}
-                          placeholder="Email subject…"
-                        />
-                      </div>
-                    )}
-
-                    {/* Attempt (follow_up) */}
-                    {(selectedNode.data as any).attempt !== undefined && (
-                      <div>
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                          Attempt
-                        </label>
-                        <input
-                          className="w-full bg-background border border-border rounded-lg px-2.5 py-2 text-[12px] font-medium focus:outline-none focus:ring-1 focus:ring-foreground/20 transition-all placeholder:text-muted-foreground/50"
-                          value={(selectedNode.data as any).attempt || ''}
-                          onChange={(e) => updateNodeData('attempt', e.target.value)}
-                          placeholder="e.g. Attempt #2"
-                        />
-                      </div>
-                    )}
-
-                    {/* Position */}
-                    <div>
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                        Position
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="bg-muted rounded-lg px-2.5 py-1.5">
-                          <span className="text-[9px] text-muted-foreground block">X</span>
-                          <span className="text-[11px] font-mono font-medium">{Math.round(selectedNode.position.x)}</span>
-                        </div>
-                        <div className="bg-muted rounded-lg px-2.5 py-1.5">
-                          <span className="text-[9px] text-muted-foreground block">Y</span>
-                          <span className="text-[11px] font-mono font-medium">{Math.round(selectedNode.position.y)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Delete */}
-                  <div className="p-3 border-t border-border shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full gap-2 h-8 text-xs text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg font-medium"
-                      onClick={deleteNode}
-                    >
-                      <Trash2 size={12} />
-                      Remove node
-                    </Button>
-                  </div>
-                </>
-              )}
-            </div>
+            <NodePropertyPanel
+              node={selectedNode}
+              onUpdateData={updateNodeData}
+              onDelete={deleteNode}
+              onClose={() => { setSelectedNodeId(null); setActiveTab('nodes'); }}
+            />
           )}
         </div>
 
@@ -579,6 +526,8 @@ export default function WorkflowEditor() {
             onDrop={onDrop}
             onDragOver={onDragOver}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            deleteKeyCode={['Delete', 'Backspace']}
             style={rfStyle}
             fitView
             snapToGrid
@@ -631,6 +580,13 @@ export default function WorkflowEditor() {
           )}
         </div>
       </div>
+
+      {showAgenticModal && (
+        <AgenticWorkflowModal
+          onGenerate={handleAgenticGenerate}
+          onClose={() => setShowAgenticModal(false)}
+        />
+      )}
     </div>
   );
 }

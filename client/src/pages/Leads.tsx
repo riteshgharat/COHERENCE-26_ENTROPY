@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Upload,
   Search,
@@ -20,16 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 
-const leads = [
-  { id: 1, name: 'Sarah Chen', company: 'Stripe', email: 'sarah@stripe.com', linkedin: 'sarahchen', phone: '+1-555-0101', industry: 'Fintech', location: 'San Francisco, CA', status: 'engaged' as const },
-  { id: 2, name: 'Mike Johnson', company: 'Notion', email: 'mike@notion.so', linkedin: 'mikejohnson', phone: '+1-555-0102', industry: 'Productivity', location: 'New York, NY', status: 'contacted' as const },
-  { id: 3, name: 'Emma Wilson', company: 'Figma', email: 'emma@figma.com', linkedin: 'emmawilson', phone: '+1-555-0103', industry: 'Design', location: 'San Francisco, CA', status: 'new' as const },
-  { id: 4, name: 'Alex Rivera', company: 'Linear', email: 'alex@linear.app', linkedin: 'alexrivera', phone: '+1-555-0104', industry: 'DevTools', location: 'Remote', status: 'bounced' as const },
-  { id: 5, name: 'Lisa Park', company: 'Vercel', email: 'lisa@vercel.com', linkedin: 'lisapark', phone: '+1-555-0105', industry: 'Infrastructure', location: 'San Francisco, CA', status: 'engaged' as const },
-  { id: 6, name: 'James Brown', company: 'Supabase', email: 'james@supabase.io', linkedin: 'jamesbrown', phone: '+1-555-0106', industry: 'Database', location: 'Singapore', status: 'contacted' as const },
-  { id: 7, name: 'Olivia Martinez', company: 'Anthropic', email: 'olivia@anthropic.com', linkedin: 'oliviamartinez', phone: '+1-555-0107', industry: 'AI', location: 'San Francisco, CA', status: 'new' as const },
-  { id: 8, name: 'Daniel Kim', company: 'Retool', email: 'daniel@retool.com', linkedin: 'danielkim', phone: '+1-555-0108', industry: 'DevTools', location: 'San Francisco, CA', status: 'engaged' as const },
-];
+// The static `leads` array is replaced by a state variable in the component.
 
 const statusConfig = {
   new: { label: 'New', variant: 'secondary' as const, icon: Clock },
@@ -38,23 +29,75 @@ const statusConfig = {
   bounced: { label: 'Bounced', variant: 'destructive' as const, icon: XCircle },
 };
 
-const stats = [
-  { label: 'Total Leads', value: '12,847' },
-  { label: 'New Today', value: '148' },
-  { label: 'Engaged', value: '4,291' },
-  { label: 'Bounced', value: '312' },
-];
-
 export default function Leads() {
+  const [leads, setLeads] = useState<Record<string, any>[]>([]);
+  const [stats, setStats] = useState([
+    { label: 'Total Leads', value: '0' },
+    { label: 'New Today', value: '0' },
+    { label: 'Engaged', value: '0' },
+    { label: 'Bounced', value: '0' },
+  ]);
+  const [uploading, setUploading] = useState(false);
+
+  const fetchLeads = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/api/v1/leads/');
+      const data = await res.json();
+      if (data.leads) {
+        setLeads(data.leads);
+        const total = data.leads.length;
+        const engaged = data.leads.filter((l: any) => ['replied', 'interested', 'converted'].includes(l.status)).length;
+        const bounced = data.leads.filter((l: any) => l.status === 'not_interested' || l.status === 'bounced').length;
+        const newLeads = data.leads.filter((l: any) => l.status === 'new').length;
+        setStats([
+          { label: 'Total Leads', value: total.toLocaleString() },
+          { label: 'New', value: newLeads.toLocaleString() },
+          { label: 'Engaged', value: engaged.toLocaleString() },
+          { label: 'Bounced', value: bounced.toLocaleString() },
+        ]);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchLeads();
+  }, []);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('http://localhost:8000/api/v1/leads/import', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Import failed');
+      alert(`Imported ${data.total_imported} leads, skipped ${data.total_skipped}`);
+      setShowUpload(false);
+      fetchLeads();
+    } catch (err: any) {
+      alert('Import failed: ' + (err.message || err));
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const [searchQuery, setSearchQuery] = useState('');
   const [showUpload, setShowUpload] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filteredLeads = leads.filter(
     (l) =>
-      l.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      l.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      l.industry.toLowerCase().includes(searchQuery.toLowerCase())
+      (l.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (l.company || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (l.industry || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -98,13 +141,27 @@ export default function Leads() {
         </CardHeader>
 
         {showUpload && (
-          <div className="mx-6 mb-4 p-6 border-2 border-dashed border-border rounded-xl bg-muted/30 text-center animate-fade-in">
-            <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.json" className="hidden" />
+          <div
+            className="mx-6 mb-4 p-6 border-2 border-dashed border-border rounded-xl bg-muted/30 text-center animate-fade-in"
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const file = e.dataTransfer.files[0];
+              if (file && fileInputRef.current) {
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                fileInputRef.current.files = dt.files;
+                fileInputRef.current.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+            }}
+          >
+            <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.json" className="hidden" onChange={handleFileUpload} />
             <FileSpreadsheet size={28} className="mx-auto text-muted-foreground mb-3" />
-            <p className="text-sm font-medium">Drag & drop your file here</p>
+            <p className="text-sm font-medium">{uploading ? 'Uploading…' : 'Drag & drop your file here'}</p>
             <p className="text-xs text-muted-foreground mt-1 mb-3">Supports CSV, Excel, and JSON formats</p>
-            <Button variant="outline" size="sm" className="text-xs rounded-lg" onClick={() => fileInputRef.current?.click()}>
-              Browse Files
+            <Button variant="outline" size="sm" className="text-xs rounded-lg" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+              {uploading ? 'Uploading…' : 'Browse Files'}
             </Button>
           </div>
         )}
@@ -125,13 +182,14 @@ export default function Leads() {
               </thead>
               <tbody>
                 {filteredLeads.map((lead) => {
-                  const status = statusConfig[lead.status];
+                  const statusKey = (lead.status === 'replied' || lead.status === 'interested' || lead.status === 'converted' ? 'engaged' : lead.status === 'contacted' ? 'contacted' : lead.status === 'not_interested' ? 'bounced' : 'new') as keyof typeof statusConfig;
+                  const status = statusConfig[statusKey] || statusConfig.new;
                   return (
                     <tr key={lead.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors group">
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
                           <div className="h-8 w-8 rounded-xl bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0">
-                            {lead.name.split(' ').map(w => w[0]).join('')}
+                            {lead.name ? lead.name.split(' ').map((w: string) => w[0]).join('') : '?'}
                           </div>
                           <div>
                             <div className="text-sm font-medium">{lead.name}</div>

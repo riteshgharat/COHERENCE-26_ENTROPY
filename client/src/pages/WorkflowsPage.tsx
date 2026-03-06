@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FilePlus2,
@@ -143,8 +143,34 @@ export default function WorkflowsPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
+  const [dbWorkflows, setDbWorkflows] = useState<any[]>([]);
 
-  const filtered = templates.filter((t) => {
+  useEffect(() => {
+    fetch('http://localhost:8000/api/v1/workflows/')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.workflows) {
+          const mapped = data.workflows.map((wf: any) => ({
+            id: wf.id,
+            name: wf.name || 'Untitled Workflow',
+            description: 'Custom workflow created from the editor.',
+            author: 'You',
+            verified: false,
+            setupTime: '0 min',
+            nodes: wf.flow_data?.nodes?.length || 0,
+            stars: 0,
+            channels: ['email'],
+            tags: ['Custom'],
+          }));
+          setDbWorkflows(mapped);
+        }
+      })
+      .catch(console.error);
+  }, []);
+
+  const allTemplates = [...dbWorkflows, ...templates];
+
+  const filtered = allTemplates.filter((t: any) => {
     const matchSearch =
       t.name.toLowerCase().includes(search.toLowerCase()) ||
       t.description.toLowerCase().includes(search.toLowerCase());
@@ -198,11 +224,10 @@ export default function WorkflowsPage() {
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}
-              className={`text-[11px] font-bold px-3 py-1.5 rounded-[4px] border-2 transition-all duration-150 ${
-                activeCategory === cat
+              className={`text-[11px] font-bold px-3 py-1.5 rounded-[4px] border-2 transition-all duration-150 ${activeCategory === cat
                   ? 'bg-foreground text-background border-foreground'
                   : 'bg-background text-muted-foreground border-border hover:text-foreground hover:border-foreground/50'
-              }`}
+                }`}
             >
               {cat}
             </button>

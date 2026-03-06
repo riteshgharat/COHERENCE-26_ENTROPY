@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Mail,
   Linkedin,
@@ -85,14 +85,68 @@ const channels = [
 
 export default function Channels() {
   const [connecting, setConnecting] = useState<string | null>(null);
+  const [channelStatuses, setChannelStatuses] = useState<any[]>([]);
 
-  const handleConnect = (channelId: string) => {
-    setConnecting(channelId);
-    setTimeout(() => setConnecting(null), 2000);
+  const fetchStatuses = () => {
+    fetch('http://localhost:8000/api/v1/channels/status')
+      .then(res => res.json())
+      .then(data => {
+        // Backend returns an array of {channel, connected, daily_sent, daily_limit}
+        setChannelStatuses(Array.isArray(data) ? data : (data.status || []));
+      })
+      .catch(console.error);
   };
 
-  const connected = channels.filter((c) => c.connected).length;
-  const available = channels.filter((c) => !c.connected).length;
+  useEffect(() => {
+    fetchStatuses();
+  }, []);
+
+  const handleConnect = async (channelId: string) => {
+    setConnecting(channelId);
+    try {
+      // Try to reach the actual external service to verify connectivity
+      const serviceUrls: Record<string, string> = {
+        whatsapp: 'http://localhost:3000/status',
+        linkedin: 'http://localhost:3001/status',
+        gmail: 'http://localhost:3002/status',
+        outlook: 'http://localhost:3002/status',
+      };
+      const url = serviceUrls[channelId];
+      if (url) {
+        const res = await fetch(url).catch(() => null);
+        if (res && res.ok) {
+          alert(`${channelId} service is reachable and connected!`);
+        } else {
+          alert(`${channelId} service is not running. Start it first.`);
+        }
+      }
+      fetchStatuses();
+    } catch {
+      alert('Could not reach the service.');
+    } finally {
+      setConnecting(null);
+    }
+  };
+
+  const dynamicChannels = channels.map(c => {
+    const key = c.id === 'gmail' || c.id === 'outlook' ? 'email' : c.id;
+    const status = channelStatuses.find((s: any) => s.channel === key);
+    if (status) {
+      return {
+        ...c,
+        connected: status.connected,
+        stats: status.connected ? [
+          { label: 'Sent', value: String(status.daily_sent ?? 0) },
+          { label: 'Limit', value: String(status.daily_limit ?? 0) },
+          { label: 'Left', value: String((status.daily_limit ?? 0) - (status.daily_sent ?? 0)) },
+        ] : c.stats,
+      };
+    }
+    return c;
+  });
+
+  const connected = dynamicChannels.filter((c) => c.connected).length;
+  const available = dynamicChannels.filter((c) => !c.connected).length;
 
   return (
     <div className="max-w-4xl mx-auto animate-fade-in">
@@ -128,7 +182,7 @@ export default function Channels() {
 
       {/* ── Channel list ── */}
       <div className="space-y-3">
-        {channels.map((channel) => (
+        {dynamicChannels.map((channel) => (
           <div
             key={channel.id}
             className="rounded-[8px] border-2 border-border bg-card overflow-hidden hover:border-foreground/30 transition-colors"
@@ -148,11 +202,10 @@ export default function Channels() {
                     <div>
                       <div className="flex items-center gap-2.5 mb-1">
                         <h3 className="text-[14px] font-extrabold">{channel.name}</h3>
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-[4px] border-2 ${
-                          channel.connected
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-[4px] border-2 ${channel.connected
                             ? 'bg-foreground text-background border-foreground'
                             : 'bg-background text-muted-foreground border-border'
-                        }`}>
+                          }`}>
                           {channel.connected
                             ? <><CheckCircle2 size={8} /> Connected</>
                             : 'Not Connected'

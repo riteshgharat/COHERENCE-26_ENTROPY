@@ -20,29 +20,11 @@ interface Message {
 }
 
 const suggestedQueries = [
-  { icon: TrendingUp, text: 'Why is my reply rate low this week?' },
-  { icon: BarChart3, text: 'Which industry segments respond most?' },
+  { icon: TrendingUp, text: 'How is my campaign performing?' },
+  { icon: BarChart3, text: 'Which channels have the best response rate?' },
   { icon: MessageCircle, text: 'How can I improve my outreach messaging?' },
   { icon: Lightbulb, text: 'Suggest a workflow for SaaS founders' },
 ];
-
-const mockResponses: Record<string, string> = {
-  'why is my reply rate low': `Based on your campaign data, here are the key factors affecting your reply rate:\n\n**1. Timing Issue** — 42% of your emails are sent between 2-4 PM, which historically has lower open rates. Try shifting to 8-10 AM.\n\n**2. Subject Line Length** — Your average subject is 68 characters. Top-performing campaigns use 35-45 characters.\n\n**3. Follow-up Gap** — You're waiting 72 hours for follow-ups. Data shows 24-48 hours yields 23% higher responses.\n\n**Recommendation:** Adjust send times, shorten subjects, and tighten follow-up windows.`,
-
-  'which industry': `Here's the industry breakdown from your campaigns:\n\n| Industry | Reply Rate | Leads |\n|----------|-----------|-------|\n| AI/ML | **42%** | 1,400 |\n| SaaS | **38%** | 3,200 |\n| Fintech | **34%** | 2,100 |\n| DevTools | **31%** | 1,800 |\n\n**AI/ML** leads have the highest engagement, followed by **SaaS**. Consider allocating more budget to these segments.`,
-
-  'improve': `Here are 5 data-driven ways to improve your outreach:\n\n1. **Personalize the first line** — Reference their recent work or company news. This alone can boost replies by 30%.\n\n2. **Keep it short** — Messages under 100 words get 2x more replies.\n\n3. **Add social proof** — Mention mutual connections or relevant case studies.\n\n4. **Use questions** — End with a specific, easy-to-answer question.\n\n5. **A/B test** — Test 2-3 variations per campaign to find what resonates.`,
-
-  'suggest': `Here's a recommended workflow for reaching SaaS founders:\n\n**Day 1:** Send LinkedIn connection request with personalized note\n**Day 2:** Wait for connection acceptance\n**Day 3:** Send warm intro email referencing mutual connections\n**Day 5:** Follow up with a value-add (case study / article)\n**Day 8:** Send final follow-up with direct CTA\n\nWould you like me to generate this as a workflow in the builder?`,
-};
-
-function getResponse(input: string): string {
-  const lower = input.toLowerCase();
-  for (const [key, response] of Object.entries(mockResponses)) {
-    if (lower.includes(key)) return response;
-  }
-  return `I've analyzed your campaign data. Based on your current metrics:\n\n• **12,847** total leads processed\n• **34.2%** average response rate\n• **24** active campaigns\n\nYour performance is above industry average. Would you like me to drill deeper into any specific metric or campaign?`;
-}
 
 export default function AIChat() {
   const [messages, setMessages] = useState<Message[]>([
@@ -63,9 +45,9 @@ export default function AIChat() {
     }
   }, [messages, isTyping]);
 
-  const handleSend = (text?: string) => {
+  const handleSend = async (text?: string) => {
     const message = text || input;
-    if (!message.trim()) return;
+    if (!message.trim() || isTyping) return;
 
     const userMsg: Message = {
       id: messages.length,
@@ -74,20 +56,40 @@ export default function AIChat() {
       timestamp: 'Just now',
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
     setInput('');
     setIsTyping(true);
 
-    setTimeout(() => {
+    try {
+      const chatHistory = updatedMessages
+        .filter(m => m.id > 0) // skip initial greeting
+        .map(m => ({ role: m.role, content: m.content }));
+
+      const res = await fetch('http://localhost:8000/api/v1/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: chatHistory }),
+      });
+      const data = await res.json();
       const aiMsg: Message = {
-        id: messages.length + 1,
+        id: updatedMessages.length,
         role: 'assistant',
-        content: getResponse(message),
+        content: data.reply || 'Sorry, I couldn\'t generate a response.',
         timestamp: 'Just now',
       };
-      setMessages((prev) => [...prev, aiMsg]);
+      setMessages(prev => [...prev, aiMsg]);
+    } catch (err) {
+      const aiMsg: Message = {
+        id: updatedMessages.length,
+        role: 'assistant',
+        content: 'Failed to reach the AI service. Make sure the backend is running.',
+        timestamp: 'Just now',
+      };
+      setMessages(prev => [...prev, aiMsg]);
+    } finally {
       setIsTyping(false);
-    }, 1200);
+    }
   };
 
   return (

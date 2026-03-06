@@ -19,6 +19,7 @@ from app.api import (
     channels_router,
     analytics_router,
     ai_router,
+    campaigns_router,
 )
 from app.api.webhooks import router as webhooks_router
 from app.utils.logger import get_logger
@@ -68,6 +69,7 @@ app.include_router(workflows_router, prefix=API_PREFIX)
 app.include_router(channels_router, prefix=API_PREFIX)
 app.include_router(analytics_router, prefix=API_PREFIX)
 app.include_router(ai_router, prefix=API_PREFIX)
+app.include_router(campaigns_router, prefix=API_PREFIX)
 app.include_router(webhooks_router, prefix=API_PREFIX)
 
 

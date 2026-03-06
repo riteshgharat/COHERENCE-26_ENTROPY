@@ -62,6 +62,48 @@ def process_inbound_reply_task(self, message_id: str):
         db.commit()
         log.info(f"Lead {lead.email} updated to {lead.status}")
 
+        # If lead is interested or replied, generate a contextual AI reply and send it
+        if classification in ("interested", "replied"):
+            try:
+                from app.services.ai_service import generate_conversation_reply
+                from app.services.message_service import send_message
+                from app.models.message import MessageChannel, MessageDirection
+
+                # Fetch conversation history for this lead
+                history = (
+                    db.query(Message)
+                    .filter(Message.lead_id == lead.id)
+                    .order_by(Message.created_at.asc())
+                    .all()
+                )
+                conversation = [
+                    {"role": "assistant" if m.direction == MessageDirection.OUTBOUND else "user",
+                     "content": m.body}
+                    for m in history if m.body
+                ]
+
+                loop2 = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop2)
+                ai_reply = loop2.run_until_complete(
+                    generate_conversation_reply(
+                        lead_data={"name": lead.name, "email": lead.email, "company": lead.company},
+                        conversation_history=conversation,
+                    )
+                )
+                loop2.run_until_complete(
+                    send_message(
+                        db=db,
+                        lead_id=lead.id,
+                        channel=msg.channel,
+                        body=ai_reply,
+                        subject="Re: Following up",
+                    )
+                )
+                loop2.close()
+                log.info(f"AI conversation reply sent to {lead.email}")
+            except Exception as conv_err:
+                log.warning(f"AI conversation reply failed (non-fatal): {conv_err}")
+
         return {"message_id": message_id, "classification": classification}
 
     except Exception as exc:
