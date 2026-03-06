@@ -47,41 +47,18 @@ async def send_message(
     db.refresh(msg)
 
     try:
-        if channel == MessageChannel.EMAIL:
-            # Get lead email from the DB
-            from app.models import Lead
+        from app.workers.messaging_worker import send_message_task
+        import random
 
-            lead = db.query(Lead).filter(Lead.id == lead_id).first()
-            if not lead or not lead.email:
-                raise ValueError(f"Lead {lead_id} has no email address")
-
-            await send_email(
-                to_address=lead.email,
-                subject=subject or "Hello!",
-                body=body,
-            )
-            msg.status = MessageStatus.SENT
-            msg.sent_at = datetime.utcnow()
-            log.info(f"Email sent to {lead.email} for lead {lead_id}")
-
-        elif channel == MessageChannel.LINKEDIN:
-            # Phase 2
-            log.warning("LinkedIn channel not yet implemented – marking as pending")
-            msg.status = MessageStatus.PENDING
-
-        elif channel == MessageChannel.WHATSAPP:
-            # Phase 2
-            log.warning("WhatsApp channel not yet implemented – marking as pending")
-            msg.status = MessageStatus.PENDING
-
-        else:
-            raise ValueError(f"Unknown channel: {channel}")
+        # Phase 2: Add simple throttling via random task stagger (0 to 30s)
+        jitter = random.randint(0, 30)
+        send_message_task.apply_async(args=[str(msg.id)], countdown=jitter)
+        log.info(f"Queued message {msg.id} via Celery with {jitter}s jitter")
 
     except Exception as e:
         msg.status = MessageStatus.FAILED
         msg.error_detail = str(e)
-        log.error(f"Message send failed for lead {lead_id}: {e}")
+        log.error(f"Failed to queue message {msg.id} for lead {lead_id}: {e}")
+        db.commit()
 
-    db.commit()
-    db.refresh(msg)
     return msg

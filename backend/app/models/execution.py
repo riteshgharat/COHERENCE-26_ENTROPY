@@ -51,6 +51,7 @@ class WorkflowExecution(Base):
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    resume_at = Column(DateTime, nullable=True)
 
     # Relationships
     workflow = relationship("Workflow", back_populates="executions")

@@ -33,32 +33,78 @@ class WorkflowEngine:
         self,
         workflow_id,
         lead_ids: Optional[list] = None,
+        execution_id: Optional[str] = None,
     ) -> WorkflowExecution:
         """
         Main entry point – runs the full workflow for a set of leads.
+        If execution_id is provided, it resumes a previously paused workflow.
         """
         workflow = self.db.query(Workflow).filter(Workflow.id == workflow_id).first()
         if not workflow:
             raise ValueError(f"Workflow {workflow_id} not found")
 
-        # Create execution record
-        execution = WorkflowExecution(
-            workflow_id=workflow.id,
-            status=ExecutionStatus.RUNNING,
-            started_at=datetime.utcnow(),
-            context={},
-        )
-        self.db.add(execution)
-        self.db.commit()
-        self.db.refresh(execution)
+        if execution_id:
+            execution = (
+                self.db.query(WorkflowExecution)
+                .filter(WorkflowExecution.id == execution_id)
+                .first()
+            )
+            if not execution:
+                raise ValueError(f"Execution {execution_id} not found")
+            execution.status = ExecutionStatus.RUNNING
+            context = execution.context
 
-        log.info(f"Starting execution {execution.id} for workflow '{workflow.name}'")
+            # If context was just created by API, fully initialize it
+            if "leads" not in context:
+                initial_ids = context.get("initial_lead_ids")
+                if initial_ids:
+                    leads = self.db.query(Lead).filter(Lead.id.in_(initial_ids)).all()
+                else:
+                    leads = self.db.query(Lead).all()
+                context = {
+                    "workflow_id": str(workflow.id),
+                    "execution_id": str(execution.id),
+                    "leads": [self._lead_to_dict(l) for l in leads],
+                    "lead_ids": [str(l.id) for l in leads],
+                    "messages": [],
+                    "channel": None,
+                    "errors": [],
+                }
 
-        # Resolve leads
-        if lead_ids:
-            leads = self.db.query(Lead).filter(Lead.id.in_(lead_ids)).all()
+            self.db.commit()
+            log.info(
+                f"Resuming execution {execution.id} for workflow '{workflow.name}'"
+            )
         else:
-            leads = self.db.query(Lead).all()
+            # Create execution record
+            execution = WorkflowExecution(
+                workflow_id=workflow.id,
+                status=ExecutionStatus.RUNNING,
+                started_at=datetime.utcnow(),
+                context={},
+            )
+            self.db.add(execution)
+            self.db.commit()
+            self.db.refresh(execution)
+            log.info(
+                f"Starting execution {execution.id} for workflow '{workflow.name}'"
+            )
+
+            # Resolve leads and init context
+            if lead_ids:
+                leads = self.db.query(Lead).filter(Lead.id.in_(lead_ids)).all()
+            else:
+                leads = self.db.query(Lead).all()
+
+            context = {
+                "workflow_id": str(workflow.id),
+                "execution_id": str(execution.id),
+                "leads": [self._lead_to_dict(l) for l in leads],
+                "lead_ids": [str(l.id) for l in leads],
+                "messages": [],
+                "channel": None,
+                "errors": [],
+            }
 
         # Build ordered node list from flow_data
         flow = workflow.flow_data
@@ -66,18 +112,15 @@ class WorkflowEngine:
         edges = flow.get("edges", [])
         ordered_nodes = self._topological_sort(nodes, edges)
 
-        context: Dict[str, Any] = {
-            "workflow_id": str(workflow.id),
-            "execution_id": str(execution.id),
-            "leads": [self._lead_to_dict(l) for l in leads],
-            "lead_ids": [str(l.id) for l in leads],
-            "messages": [],
-            "channel": None,
-            "errors": [],
-        }
+        start_index = 0
+        if execution_id and execution.current_node_id:
+            for i, node_def in enumerate(ordered_nodes):
+                if str(node_def.get("id")) == str(execution.current_node_id):
+                    start_index = i + 1
+                    break
 
         try:
-            for node_def in ordered_nodes:
+            for node_def in ordered_nodes[start_index:]:
                 node_type = node_def.get("type")
                 node_data = node_def.get("data", {})
                 node_id = node_def.get("id")
@@ -94,15 +137,32 @@ class WorkflowEngine:
                 log.info(f"Executing node {node_id} ({node_type})")
                 context = await handler(context, node_data, self.db)
 
+                if "_pause_until" in context:
+                    pause_date = context.pop("_pause_until")
+                    log.info(f"Workflow {execution.id} pausing until {pause_date}")
+                    execution.status = ExecutionStatus.PAUSED
+                    execution.resume_at = pause_date
+                    execution.context = context
+                    self.db.commit()
+
+                    # Schedule resume
+                    from app.workers.workflow_worker import resume_workflow_task
+
+                    # Eta expects a timezone-aware datetime or UTC timestamp.
+                    resume_workflow_task.apply_async(
+                        args=[str(execution.id)], eta=pause_date
+                    )
+                    return execution
+
             # Mark completed
             execution.status = ExecutionStatus.COMPLETED
-            execution.leads_processed = len(leads)
+            execution.leads_processed = len(context.get("leads", []))
             execution.messages_sent = len(context.get("messages", []))
             execution.completed_at = datetime.utcnow()
             execution.context = context
 
             workflow.status = WorkflowStatus.COMPLETED
-            workflow.total_leads_processed = len(leads)
+            workflow.total_leads_processed = execution.leads_processed
 
         except Exception as e:
             log.error(f"Workflow execution failed: {e}")

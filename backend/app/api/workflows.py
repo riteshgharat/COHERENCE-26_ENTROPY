@@ -93,33 +93,52 @@ def delete_workflow(workflow_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/{workflow_id}/execute", response_model=WorkflowExecuteResponse)
-async def execute_workflow(
+def execute_workflow(
     workflow_id: UUID,
     payload: WorkflowExecuteRequest = WorkflowExecuteRequest(),
     db: Session = Depends(get_db),
 ):
     """
-    Execute a workflow. In Phase 1 this runs synchronously.
-    Phase 2 will dispatch to Celery workers.
+    Execute a workflow. In Phase 2 this dispatches to Celery workers.
     """
     wf = db.query(Workflow).filter(Workflow.id == workflow_id).first()
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
-    engine = WorkflowEngine(db)
-    lead_ids = [str(lid) for lid in payload.lead_ids] if payload.lead_ids else None
+    # Create Execution Record
+    from datetime import datetime
+    from app.models.execution import ExecutionStatus
+
+    execution = WorkflowExecution(
+        workflow_id=wf.id,
+        status=ExecutionStatus.QUEUED,
+        started_at=datetime.utcnow(),
+        context=(
+            {"initial_lead_ids": [str(lid) for lid in payload.lead_ids]}
+            if payload.lead_ids
+            else {}
+        ),
+    )
+    db.add(execution)
+    db.commit()
+    db.refresh(execution)
 
     try:
-        execution = await engine.execute(workflow_id, lead_ids)
+        from app.workers.workflow_worker import execute_workflow_task
+
+        execute_workflow_task.delay(str(wf.id), str(execution.id))
+
         return WorkflowExecuteResponse(
             execution_id=execution.id,
             workflow_id=workflow_id,
             status=execution.status.value,
-            message=f"Workflow executed: {execution.status.value}",
+            message="Workflow execution dispatched to background workers successfully.",
         )
     except Exception as e:
-        log.error(f"Workflow execution failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        log.error(f"Workflow dispatch failed: {e}")
+        execution.status = ExecutionStatus.FAILED
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"Broker connection failed: {e}")
 
 
 @router.get("/{workflow_id}/executions")

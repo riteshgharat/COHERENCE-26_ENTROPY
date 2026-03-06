@@ -1,0 +1,56 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.11, pytest-8.3.4, pluggy-1.6.0 -- D:\Dev\hackathon\COHERENCE-26_ENTROPY\backend\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: D:\dev\hackathon\COHERENCE-26_ENTROPY\backend
+configfile: pytest.ini
+testpaths: tests
+plugins: anyio-4.12.1, Faker-40.8.0, asyncio-0.25.0
+asyncio: mode=Mode.AUTO, asyncio_default_fixture_loop_scope=None
+collecting ... collected 43 items
+
+tests/test_ai.py::test_ai_preview_message PASSED                         [  2%]
+tests/test_ai.py::test_ai_preview_fallback PASSED                        [  4%]
+tests/test_ai.py::test_ai_generate_workflow_stub PASSED                  [  6%]
+tests/test_channels_analytics.py::test_channel_status PASSED             [  9%]
+tests/test_channels_analytics.py::test_analytics_dashboard_empty PASSED  [ 11%]
+tests/test_channels_analytics.py::test_analytics_dashboard_with_data PASSED [ 13%]
+tests/test_file_parser.py::test_parse_csv PASSED                         [ 16%]
+tests/test_file_parser.py::test_parse_json_array PASSED                  [ 18%]
+tests/test_file_parser.py::test_parse_json_object_with_leads_key PASSED  [ 20%]
+tests/test_file_parser.py::test_parse_unsupported_format PASSED          [ 23%]
+tests/test_file_parser.py::test_parse_csv_normalises_columns PASSED      [ 25%]
+tests/test_health.py::test_root_returns_app_info PASSED                  [ 27%]
+tests/test_health.py::test_health_check PASSED                           [ 30%]
+tests/test_health.py::test_docs_accessible PASSED                        [ 32%]
+tests/test_leads.py::test_create_lead PASSED                             [ 34%]
+tests/test_leads.py::test_create_lead_name_required PASSED               [ 37%]
+tests/test_leads.py::test_list_leads_empty PASSED                        [ 39%]
+tests/test_leads.py::test_list_leads_with_data PASSED                    [ 41%]
+tests/test_leads.py::test_get_lead_by_id PASSED                          [ 44%]
+tests/test_leads.py::test_get_lead_not_found PASSED                      [ 46%]
+tests/test_leads.py::test_update_lead PASSED                             [ 48%]
+tests/test_leads.py::test_delete_lead PASSED                             [ 51%]
+tests/test_leads.py::test_import_csv PASSED                              [ 53%]
+tests/test_leads.py::test_import_json PASSED                             [ 55%]
+tests/test_leads.py::test_import_csv_missing_name PASSED                 [ 58%]
+tests/test_leads.py::test_import_csv_field_mapping PASSED                [ 60%]
+tests/test_leads.py::test_pagination PASSED                              [ 62%]
+tests/test_nodes.py::test_start_node_with_leads PASSED                   [ 65%]
+tests/test_nodes.py::test_start_node_no_leads_raises PASSED              [ 67%]
+tests/test_nodes.py::test_lead_import_passthrough PASSED                 [ 69%]
+tests/test_nodes.py::test_lead_import_industry_filter PASSED             [ 72%]
+tests/test_nodes.py::test_channel_select_default PASSED                  [ 74%]
+tests/test_nodes.py::test_channel_select_whatsapp PASSED                 [ 76%]
+tests/test_nodes.py::test_channel_select_invalid_falls_back PASSED       [ 79%]
+tests/test_workflows.py::test_create_workflow PASSED                     [ 81%]
+tests/test_workflows.py::test_create_workflow_name_required PASSED       [ 83%]
+tests/test_workflows.py::test_list_workflows PASSED                      [ 86%]
+tests/test_workflows.py::test_get_workflow PASSED                        [ 88%]
+tests/test_workflows.py::test_update_workflow PASSED                     [ 90%]
+tests/test_workflows.py::test_delete_workflow PASSED                     [ 93%]
+tests/test_workflows.py::test_execute_workflow 
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! KeyboardInterrupt !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+C:\Users\RITESH\AppData\Roaming\uv\python\cpython-3.11.11-windows-x86_64-none\Lib\threading.py:327: KeyboardInterrupt
+(to show a full traceback on KeyboardInterrupt use --full-trace)
+======================== 40 passed in 79.41s (0:01:19) ========================
