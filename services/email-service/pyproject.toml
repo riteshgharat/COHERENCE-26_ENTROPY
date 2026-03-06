@@ -1,0 +1,21 @@
+[project]
+name = "email-service"
+version = "0.1.0"
+description = "Microservice for reading and responding to emails via IMAP and SMTP"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "python-dotenv",
+    "aioimaplib",
+    "aiosmtplib",
+    "beautifulsoup4",
+    "pydantic-settings>=2.13.1",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest",
+    "pytest-asyncio",
+]

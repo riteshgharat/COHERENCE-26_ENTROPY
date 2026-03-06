@@ -114,6 +114,100 @@ async def import_leads(
     )
 
 
+from pydantic import BaseModel
+
+
+class SheetImportRequest(BaseModel):
+    spreadsheet_id: str
+    worksheet_name: Optional[str] = "Sheet1"
+
+
+@router.post("/import-sheets", response_model=LeadImportResponse)
+async def import_sheets(
+    payload: SheetImportRequest,
+    db: Session = Depends(get_db),
+):
+    """Import leads directly from a Google Sheet."""
+    try:
+        from app.integrations.google_sheets_client import read_from_sheet
+
+        rows = await read_from_sheet(payload.spreadsheet_id, payload.worksheet_name)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400, detail=f"Failed to read Google Sheet: {str(e)}"
+        )
+
+    imported = 0
+    skipped = 0
+    errors: List[str] = []
+
+    FIELD_MAP = {
+        "name": "name",
+        "full_name": "name",
+        "contact_name": "name",
+        "email": "email",
+        "email_address": "email",
+        "mail": "email",
+        "phone": "phone",
+        "phone_number": "phone",
+        "mobile": "phone",
+        "company": "company",
+        "company_name": "company",
+        "organization": "company",
+        "industry": "industry",
+        "sector": "industry",
+        "linkedin_url": "linkedin_url",
+        "linkedin": "linkedin_url",
+        "title": "title",
+        "job_title": "title",
+        "position": "title",
+        "location": "location",
+        "city": "location",
+        "country": "location",
+    }
+
+    for idx, row in enumerate(rows):
+        try:
+            normalised = {}
+            extra = {}
+            for key, value in row.items():
+                mapped = FIELD_MAP.get(str(key).lower().strip())
+                if mapped:
+                    normalised[mapped] = value
+                else:
+                    extra[key] = value
+
+            name = normalised.get("name")
+            if not name:
+                skipped += 1
+                errors.append(f"Row {idx + 1}: missing 'name' field")
+                continue
+
+            lead = Lead(
+                name=str(name),
+                email=normalised.get("email"),
+                phone=str(normalised["phone"]) if normalised.get("phone") else None,
+                company=normalised.get("company"),
+                industry=normalised.get("industry"),
+                linkedin_url=normalised.get("linkedin_url"),
+                title=normalised.get("title"),
+                location=normalised.get("location"),
+                extra_data=extra,
+                source="Google Sheets",
+            )
+            db.add(lead)
+            imported += 1
+        except Exception as e:
+            skipped += 1
+            errors.append(f"Row {idx + 1}: {str(e)}")
+
+    db.commit()
+    log.info(f"Imported {imported} leads from sheets, skipped {skipped}")
+    return LeadImportResponse(
+        total_imported=imported, total_skipped=skipped, errors=errors
+    )
+
+
 # ── CRUD ──
 
 

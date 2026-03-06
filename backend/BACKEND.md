@@ -6,117 +6,82 @@
 
 # 1. Overview
 
-This system is an **AI-powered outreach workflow automation platform** that allows users to build **drag-and-drop automation flows** to contact leads across multiple communication channels.
+This system is an **AI-powered outreach automation platform** designed to automate personalized communication with leads across multiple channels.
 
-The system executes **workflow pipelines** created in the frontend workflow builder (React Flow inspired by n8n).
+Supported communication channels:
 
-Each workflow is composed of **automation components (nodes)** such as:
+* Email (Gmail / SMTP)
+* WhatsApp
+* LinkedIn
 
-• Lead Import
-• AI Message Generator
-• Channel Selection
-• Send Message
-• Wait Delay
-• Reply Detection
-• Follow-Up Generator
-• AI Conversation Agent (“On Behalf of Me”)
-• Google Sheets Update
-• Analytics Tracking
+Core capabilities:
 
-The backend executes these workflows using a **distributed task execution engine**.
+* Import leads from **CSV / XLSX / JSON / Google Sheets**
+* Create **workflow-based outreach campaigns**
+* Generate **AI-personalized messages**
+* Send messages across multiple channels
+* Track replies and extract referrals
+* Monitor campaign analytics
+* Implement safety throttling to prevent spam detection
 
----
+The backend uses a **distributed microservice architecture** with:
 
-# 2. Supported Communication Channels
-
-Messages are sent **on behalf of the user** after the user connects their accounts.
-
-Supported channels:
-
-• Email (Gmail / SMTP)
-• WhatsApp
-• LinkedIn
-
-Future channels:
-
-• X (Twitter)
-• Telegram
-• SMS
+* **FastAPI core backend**
+* **Redis task queue**
+* **Celery workers**
+* **Node.js WhatsApp microservice**
 
 ---
 
-# 3. Core Capabilities
-
-The backend provides the following features:
-
-Lead ingestion from:
-
-CSV
-XLSX
-JSON
-Google Sheets
-
-Automation capabilities:
-
-• Visual workflow execution
-• AI personalized message generation
-• Multi-channel outreach
-• Automated follow-ups
-• AI conversation agent replies
-• Agentic workflow generation
-• Reply detection and classification
-• Campaign analytics dashboard
-• Safety throttling to prevent spam
-
----
-
-# 4. High Level System Architecture
+# 2. High-Level System Architecture
 
 ```
-                        Frontend (React + React Flow)
-                                │
-                         REST / WebSocket API
-                                │
-                                ▼
-                         FastAPI API Gateway
-                                │
-        ┌───────────────────────┼────────────────────────┐
-        │                       │                        │
-        ▼                       ▼                        ▼
-   Lead Service          Workflow Engine          Channel Manager
- (Data ingestion)      (Node execution engine)     (Account links)
-        │                       │                        │
-        ▼                       ▼                        ▼
-    PostgreSQL              Redis Queue           Messaging Gateway
-     Database              (Task Broker)         (Channel routing)
-        │                       │                        │
-        └──────────────► Celery Workers ◄───────────────┘
+                        Frontend (React)
+                              │
+                       REST / WebSocket
+                              │
+                              ▼
+                       FastAPI API Gateway
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        │                     │                     │
+        ▼                     ▼                     ▼
+   Lead Service         Workflow Engine       Campaign Manager
+ (Lead ingestion)      (Automation logic)     (Campaign control)
+        │                     │                     │
+        ▼                     ▼                     ▼
+     PostgreSQL            Redis Queue        Messaging Gateway
+    (Primary DB)          (Task Broker)       (Channel Router)
+        │                     │                     │
+        └──────────────► Celery Workers ◄──────────┘
                                │
                                ▼
-                         AI Messaging Service
-                        (Groq / Gemini Models)
+                        AI Messaging Service
+                        (LLM Generation)
                                │
                                ▼
-                         AI Agent Services
-                (Message generation + conversations)
+                        LLM Providers
+                 (OpenAI / Gemini / Local Models)
 
 Messaging Microservices
 -----------------------
 
 WhatsApp Service (NodeJS)
 
-LinkedIn Automation Service
+LinkedIn Service (Python)
 
-Email Service
+Email Service (Python)
 
 Reply Processing Service
 
-Analytics Service
+Monitoring / Analytics Service
+
+Safety & Throttling Engine
 ```
 
 ---
 
-# 5. Core Technology Stack
+# 3. Core Technology Stack
 
 ## Backend API
 
@@ -133,8 +98,9 @@ SQLAlchemy
 ## Database
 
 ```
-PostgreSQL → primary relational database
-Redis → task queue, caching, throttling
+PostgreSQL → main relational database
+
+Redis → queue, caching, and rate limiting
 ```
 
 ---
@@ -147,164 +113,126 @@ Redis Queue
 Celery Beat Scheduler
 ```
 
-Workers execute:
+Workers handle:
 
-• workflow nodes
-• AI message generation
-• message dispatch
-• delay scheduling
-• reply monitoring
+* workflow execution
+* AI message generation
+* sending messages
+* reply processing
+* delay scheduling
 
 ---
 
-# 6. Repository Structure
+# 4. Messaging Microservice Architecture
+
+Messaging is handled by **independent services** so each channel can scale independently.
+
+```
+Messaging Gateway
+        │
+        ├── Gmail Service
+        ├── LinkedIn Service
+        └── WhatsApp Service
+```
+
+Each service consumes tasks from Redis and processes them concurrently.
+
+This enables **thousands of messages to run in parallel**.
+
+---
+
+# 5. Repository Structure
 
 ```
 project-root/
 
-backend/
-
-├── app/
+services/                   # external messaging microservices
 │
-│   ├── api/
-│   │    ├── leads.py
-│   │    ├── workflows.py
-│   │    ├── channels.py
-│   │    ├── analytics.py
-│   │    └── ai.py
-│   │
-│   ├── models/
-│   ├── schemas/
-│   │
-│   ├── services/
-│   │    ├── workflow_engine.py
-│   │    ├── message_service.py
-│   │    ├── ai_service.py
-│   │    ├── reply_service.py
-│   │    └── analytics_service.py
-│   │
-│   ├── nodes/
-│   │    ├── start_node.py
-│   │    ├── lead_import_node.py
-│   │    ├── ai_message_node.py
-│   │    ├── channel_select_node.py
-│   │    ├── send_message_node.py
-│   │    ├── wait_node.py
-│   │    ├── check_reply_node.py
-│   │    ├── followup_node.py
-│   │    ├── ai_conversation_node.py
-│   │    └── sheets_update_node.py
-│   │
-│   ├── utils/
-│   │
-│   └── main.py
+├── whatsapp-service/       # NodeJS service
+│   ├── server.js
+│   ├── whatsapp.js
+│   ├── messageHandler.js
+│   ├── sessionManager.js
+│   └── package.json
 │
-├── workers/
-│   ├── celery_app.py
-│   ├── workflow_worker.py
-│   ├── messaging_worker.py
-│   └── reply_worker.py
-│
-└── integrations/
-    ├── email_client.py
-    ├── linkedin_client.py
-    ├── whatsapp_client.py
-    └── google_sheets_client.py
-
-
-services/
-
-├── whatsapp-service/
-│
-└── linkedin-service/
+└── linkedin-service/       # optional future service
 ```
 
 ---
 
-# 7. Workflow Component Architecture
+# 6. WhatsApp Service Architecture
 
-The system executes workflows composed of **automation nodes**.
+WhatsApp messaging runs as a **Node.js microservice**.
 
-Each node represents one component from the frontend workflow builder.
-
-Supported nodes:
-
-Start Node
-Lead Import Node
-AI Message Generator Node
-Channel Select Node
-Send Message Node
-Wait Delay Node
-Reply Detection Node
-Follow-Up Node
-AI Conversation Node
-Google Sheets Update Node
-Analytics Node
-
-Each node implements:
+Libraries used:
 
 ```
-execute(context)
+Baileys
+WhatsApp-web.js
 ```
 
-The **workflow engine traverses nodes sequentially**.
-
----
-
-# 8. Example Workflow
+### Service Structure
 
 ```
-Start
- ↓
-Import Leads
- ↓
-AI Message Generator
- ↓
-Select Channel
- ↓
-Send Message
- ↓
-Wait Delay
- ↓
-Check Reply
- ↓
-Follow Up
- ↓
-AI Conversation Agent
- ↓
-Update Google Sheet
- ↓
-Analytics
+services/whatsapp-service/
+
+server.js
+whatsapp.js
+sessionManager.js
+messageHandler.js
+```
+
+### WhatsApp Login Flow
+
+```
+User clicks connect WhatsApp
+        │
+        ▼
+FastAPI requests QR code
+        │
+        ▼
+WhatsApp service generates QR
+        │
+        ▼
+Frontend displays QR
+        │
+        ▼
+User scans QR with phone
+        │
+        ▼
+Session stored in Redis / DB
 ```
 
 ---
 
-# 9. Workflow JSON Format
+# 7. Service Communication
 
-Workflows are stored as JSON compatible with the **React Flow editor**.
+Services communicate through **HTTP APIs or Redis queue tasks**.
 
-Example:
+Example flow:
 
 ```
-{
- "nodes":[
-   {"id":"1","type":"start"},
-   {"id":"2","type":"lead_import"},
-   {"id":"3","type":"ai_message"},
-   {"id":"4","type":"channel_select"},
-   {"id":"5","type":"send_message"},
-   {"id":"6","type":"wait"},
-   {"id":"7","type":"check_reply"},
-   {"id":"8","type":"followup"},
-   {"id":"9","type":"ai_conversation"},
-   {"id":"10","type":"update_sheets"}
- ]
-}
+FastAPI Worker
+      │
+      ▼
+Redis Task Queue
+      │
+      ▼
+Messaging Worker
+      │
+      ▼
+HTTP request → WhatsApp Service
+      │
+      ▼
+Baileys client
+      │
+      ▼
+Send message to WhatsApp
 ```
 
 ---
 
-# 10. Lead Ingestion System
+# 8. Lead Ingestion System
 
 Supported sources:
 
@@ -315,13 +243,13 @@ JSON
 Google Sheets
 ```
 
-Processing flow:
+Import flow:
 
 ```
 User uploads dataset
         │
         ▼
-File parsed using Pandas
+Pandas parses file
         │
         ▼
 Schema validation
@@ -338,110 +266,141 @@ POST /leads/import
 
 ---
 
-# 11. AI Message Generation
+# 9. Database Schema
 
-Messages are generated using **Groq or Gemini models**.
-
-Inputs used:
-
-• Lead information
-• User tone settings
-• Sample message provided by user
-• Industry context
-
-Example prompt:
+## Leads
 
 ```
-Write a friendly outreach message.
-
-Name: John
-Company: ABC Logistics
-Industry: Logistics
-
-Tone: casual founder
-```
-
-Output:
-
-```
-Hi John,
-
-I noticed ABC Logistics expanding quickly...
+leads
+-----
+id
+name
+email
+phone
+linkedin_url
+company
+industry
+source
+status
+created_at
 ```
 
 ---
 
-# 12. AI Conversation Agent ("On Behalf of Me")
-
-When a lead replies, the system can respond automatically.
-
-Process:
+## Campaigns
 
 ```
-Lead reply received
-        │
-        ▼
-Conversation history retrieved
-        │
-        ▼
-AI generates contextual response
-        │
-        ▼
-Message sent automatically
+campaigns
+---------
+id
+name
+workflow_id
+status
+created_at
+created_by
 ```
-
-This simulates **human conversation handling**.
 
 ---
 
-# 13. Agentic Workflow Generator
-
-The system can **generate workflows automatically using AI**.
-
-Example input:
+## Workflows
 
 ```
-Generate outreach workflow for SaaS founders
+workflows
+---------
+id
+name
+nodes_json
+edges_json
+created_at
 ```
 
-AI generates:
+Example workflow JSON:
+
+```
+{
+ "nodes":[
+   {"id":"start"},
+   {"id":"ai_message"},
+   {"id":"send_email"},
+   {"id":"wait"},
+   {"id":"followup"}
+ ]
+}
+```
+
+---
+
+## Lead Progress
+
+```
+lead_progress
+-------------
+lead_id
+campaign_id
+current_node
+status
+last_action
+next_run_time
+```
+
+---
+
+## Messages
+
+```
+messages
+--------
+id
+lead_id
+channel
+content
+status
+sent_at
+reply
+```
+
+---
+
+# 10. Workflow Execution Engine
+
+Example workflow:
 
 ```
 Start
-Send LinkedIn message
-Wait 1 day
-Send email
-Wait 2 days
+ ↓
+Generate AI Message
+ ↓
+Send Message
+ ↓
+Wait Delay
+ ↓
+Check Reply
+ ↓
 Follow-up
+ ↓
+End
 ```
 
-The workflow is converted to **React Flow JSON format**.
+Execution flow:
+
+```
+Campaign started
+      │
+      ▼
+Tasks pushed to Redis queue
+      │
+      ▼
+Celery workers execute nodes
+      │
+      ▼
+Schedule next node
+```
 
 ---
 
-# 14. Messaging Gateway
+# 11. Intelligent Delay System
 
-Messaging is abstracted behind a unified interface.
-
-```
-send_message(channel, lead, message)
-```
-
-Channel adapters:
-
-```
-email_sender
-linkedin_sender
-whatsapp_sender
-```
-
-This ensures workflows remain **channel independent**.
-
----
-
-# 15. Intelligent Delay System
-
-Human-like sending behavior prevents spam detection.
+To simulate human behavior and prevent spam detection.
 
 Features:
 
@@ -454,12 +413,12 @@ Daily sending limits
 Example:
 
 ```
-delay = random(600, 7200)
+delay = random(300,1800)
 ```
 
 ---
 
-# 16. Reply Processing
+# 12. Reply Processing System
 
 Replies are captured from:
 
@@ -481,25 +440,46 @@ Ignore
 
 ---
 
-# 17. Google Sheets Update
+# 13. Referral Extraction
 
-Workflow nodes can update external sheets.
+Example reply:
 
-Use cases:
+```
+Please contact our CTO Raj
+raj@company.com
+```
 
-• Export campaign results
-• Share analytics
-• Maintain CRM lists
+Processing flow:
 
-Integration uses Google Sheets API.
+```
+Reply received
+      │
+      ▼
+AI extracts contact details
+      │
+      ▼
+Create new lead
+      │
+      ▼
+Add to campaign
+```
 
 ---
 
-# 18. Safety & Throttling Controls
+# 14. Safety & Throttling Controls
 
-Prevents platform bans.
+Prevents spam detection and account bans.
 
-Limits enforced per channel:
+Limits include:
+
+```
+Max messages per hour
+Max messages per day
+Max messages per domain
+Stop workflow if reply received
+```
+
+Example limits:
 
 ```
 Email → 100/day
@@ -507,17 +487,11 @@ LinkedIn → 40/day
 WhatsApp → 50/day
 ```
 
-Rules include:
-
-• stop workflow if reply received
-• delay randomization
-• per-domain rate limits
-
-Redis counters enforce limits.
+Redis counters enforce these rules.
 
 ---
 
-# 19. Analytics Engine
+# 15. Monitoring & Analytics
 
 Tracked metrics:
 
@@ -525,14 +499,14 @@ Tracked metrics:
 Leads imported
 Messages sent
 Replies received
+Campaign performance
 Conversion rate
-Channel performance
 ```
 
-API endpoint:
+Example API endpoint:
 
 ```
-GET /analytics/dashboard
+GET /dashboard/stats
 ```
 
 Example response:
@@ -548,7 +522,7 @@ Example response:
 
 ---
 
-# 20. Deployment Architecture
+# 16. Deployment Architecture
 
 Services run independently.
 
@@ -559,31 +533,34 @@ postgres
 celery-worker
 whatsapp-service
 linkedin-service
-email-service
+gmail-service
 ```
 
-Development:
+Development environment:
 
 ```
 Docker Compose
 ```
 
-Production:
+Production environment:
 
 ```
 Kubernetes
-Horizontal worker scaling
+Horizontal scaling for workers
 ```
 
 ---
 
-# 21. End to End Workflow Execution
+# 17. End-to-End Workflow
 
 ```
 User uploads leads
         │
         ▼
-Workflow created in UI
+Leads stored in database
+        │
+        ▼
+User creates workflow
         │
         ▼
 Campaign started
@@ -592,7 +569,7 @@ Campaign started
 Tasks pushed to Redis queue
         │
         ▼
-Celery workers execute nodes
+Celery workers execute workflow nodes
         │
         ▼
 AI generates message
@@ -601,40 +578,42 @@ AI generates message
 Messaging gateway routes message
         │
         ▼
-WhatsApp / Email / LinkedIn
+WhatsApp / Email / LinkedIn service
+        │
+        ▼
+Message delivered
         │
         ▼
 Reply captured
         │
         ▼
-AI conversation agent responds
-        │
-        ▼
-Analytics updated
+Workflow continues
 ```
 
 ---
 
-# 22. Hackathon MVP Scope
+# 18. MVP Scope (Hackathon)
 
-Minimum features:
+Minimum features required:
 
 ```
 Lead import
-Workflow builder execution
+Workflow engine
 AI message generation
 Email messaging
 WhatsApp integration
-Analytics dashboard
-Agentic workflow generator
+Basic monitoring dashboard
 ```
 
-Future features:
+Future improvements:
 
 ```
-AI lead discovery
-Intent scoring
-Auto-enrichment
+AI lead scoring
+Automatic lead discovery
+Smart follow-up generation
 A/B testing campaigns
-Multi-account scaling
 ```
+
+---
+
+END OF DOCUMENT

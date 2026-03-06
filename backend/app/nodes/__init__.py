@@ -14,6 +14,7 @@ from app.nodes import (
     followup_node,
     ai_conversation_node,
     sheets_update_node,
+    analytics_node,
 )
 
 # Maps React Flow node type → async handler function
@@ -28,4 +29,5 @@ NODE_REGISTRY = {
     "followup": followup_node.execute,
     "ai_conversation": ai_conversation_node.execute,
     "update_sheets": sheets_update_node.execute,
+    "analytics": analytics_node.execute,
 }

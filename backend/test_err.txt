@@ -1,0 +1,27 @@
+D:\Dev\hackathon\COHERENCE-26_ENTROPY\backend\.venv\Lib\site-packages\pytest_asyncio\plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.11.11, pytest-8.3.4, pluggy-1.6.0 -- D:\Dev\hackathon\COHERENCE-26_ENTROPY\backend\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: D:\dev\hackathon\COHERENCE-26_ENTROPY\backend
+configfile: pytest.ini
+plugins: anyio-4.12.1, Faker-40.8.0, asyncio-0.25.0
+asyncio: mode=Mode.AUTO, asyncio_default_fixture_loop_scope=None
+collecting ... collected 1 item
+
+tests/test_analytics.py::test_dashboard_analytics_aggregation ERROR      [100%]
+
+=================================== ERRORS ====================================
+___________ ERROR at setup of test_dashboard_analytics_aggregation ____________
+file D:\dev\hackathon\COHERENCE-26_ENTROPY\backend\tests\test_analytics.py, line 10
+  def test_dashboard_analytics_aggregation(db_session, test_lead, test_message):
+E       fixture 'test_lead' not found
+>       available fixtures: _session_event_loop, _session_faker, anyio_backend, anyio_backend_name, anyio_backend_options, cache, capfd, capfdbinary, caplog, capsys, capsysbinary, client, db_session, doctest_namespace, event_loop, event_loop_policy, faker, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, monkeypatch, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, setup_database, tests/test_analytics.py::<event_loop>, tests::<event_loop>, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+D:\dev\hackathon\COHERENCE-26_ENTROPY\backend\tests\test_analytics.py:10
+=========================== short test summary info ===========================
+ERROR tests/test_analytics.py::test_dashboard_analytics_aggregation
+============================== 1 error in 0.12s ===============================

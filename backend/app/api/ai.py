@@ -39,8 +39,12 @@ async def preview_message(payload: MessagePreviewRequest):
     return MessagePreviewResponse(message=message)
 
 
+from app.services.ai_service import generate_message, generate_agentic_workflow
+
+
 class WorkflowGenerateRequest(BaseModel):
     prompt: str
+    provider: Optional[str] = "groq"
 
 
 @router.post("/generate-workflow")
@@ -49,40 +53,8 @@ async def generate_workflow(payload: WorkflowGenerateRequest):
     Phase 3: Agentic workflow generation from a natural language prompt.
     Returns React Flow compatible JSON.
     """
-    log.info("Agentic workflow generation is a Phase 3 feature")
-    # Stub: return a basic template
-    return {
-        "nodes": [
-            {"id": "1", "type": "start", "data": {}, "position": {"x": 0, "y": 0}},
-            {
-                "id": "2",
-                "type": "lead_import",
-                "data": {},
-                "position": {"x": 0, "y": 100},
-            },
-            {
-                "id": "3",
-                "type": "ai_message",
-                "data": {"tone": "professional"},
-                "position": {"x": 0, "y": 200},
-            },
-            {
-                "id": "4",
-                "type": "channel_select",
-                "data": {"channel": "email"},
-                "position": {"x": 0, "y": 300},
-            },
-            {
-                "id": "5",
-                "type": "send_message",
-                "data": {},
-                "position": {"x": 0, "y": 400},
-            },
-        ],
-        "edges": [
-            {"source": "1", "target": "2"},
-            {"source": "2", "target": "3"},
-            {"source": "3", "target": "4"},
-            {"source": "4", "target": "5"},
-        ],
-    }
+    log.info(f"Generating workflow with prompt: {payload.prompt}")
+    workflow_json = await generate_agentic_workflow(
+        prompt=payload.prompt, provider=payload.provider
+    )
+    return workflow_json
