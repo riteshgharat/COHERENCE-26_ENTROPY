@@ -1,0 +1,215 @@
+# ========================
+# OS
+# ========================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+.nfs*
+
+# ========================
+# Editors / IDEs
+# ========================
+# VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# JetBrains
+.idea/
+*.iml
+out/
+
+# Sublime
+*.sublime-workspace
+*.sublime-project
+
+# Vim swap files
+.*.swp
+.*.swo
+
+# ========================
+# Node / JS
+# ========================
+# Node modules
+node_modules/
+**/node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# npm cache
+.npm
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# If you want to ignore lockfiles, remove/comment the above lockfile lines.
+# Otherwise keep them committed for reproducible installs.
+
+# ========================
+# Build / Dist
+# ========================
+# Backend
+dist/
+build/
+out/
+
+# Frontend
+public/build/
+.cache/
+.next/
+.next/
+.nuxt/
+.vercel/
+.svelte-kit/
+
+# Vite
+dist/
+.vite/
+.vitepress/dist/
+
+# Gatsby
+.cache/
+public/
+
+# Parcel
+.cache/
+.parcel-cache/
+
+# Rollup
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# ========================
+# TypeScript
+# ========================
+*.tsbuildinfo
+
+# ========================
+# Test / Coverage
+# ========================
+coverage/
+coverage-*.json
+nyc_output/
+.vitest/
+jest.config.js
+jest.cache
+
+# # ========================
+# # Docker
+# # ========================
+# # Docker
+# docker-compose.override.yml
+# docker-compose.*.yml
+# .docker/
+# **/Dockerfile*
+
+# ========================
+# Certificates / Keys
+# ========================
+*.pem
+*.key
+*.crt
+
+# ========================
+# Backend-specific
+# ========================
+# Example for common backend folders
+logs/
+logs/*.log
+pids/
+*.pid
+*.seed
+tmp/
+temp/
+
+# ORM / DB
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+
+# ========================
+# Frontend-specific
+# ========================
+# Static and generated assets
+*.map
+*.gz
+*.br
+
+# Local env for front-end frameworks
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Storybook
+.out/
+storybook-static/
+
+# ========================
+# Misc / Security
+# ========================
+# Secrets
+secrets/
+credentials/
+*.secret
+
+# Binary files
+*.exe
+*.dll
+*.so
+*.dylib
+
+# ========================
+# Optional: Monorepo / Workspace
+# ========================
+# Yarn / npm workspaces
+.pnp/
+.pnp.js
+.yarn/*
+!.yarn/releases
+!.yarn/plugins
+!.yarn/sdks
+!.yarn/patches
+
+# pnpm
+.pnpm-store/
+
+# ========================
+# Editor scratch / temp
+# ========================
+*.log
+*.tmp
+*.temp
+
+# ========================
+# Custom: local config files you may want to keep out of repo
+# ========================
+# Add any project-specific local files below
+# Example:
+# backend/config/local.json
+# frontend/src/config/local.js
+
+# End of file

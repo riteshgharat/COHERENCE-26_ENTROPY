@@ -1,0 +1,58 @@
+version: "3.9"
+
+services:
+
+  backend:
+    build: ./server
+    container_name: hackathon-backend
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/app
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./server:/app
+    command: bun run dev
+
+  frontend:
+    build: ./client
+    container_name: hackathon-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./client:/app
+    command: npm run dev
+
+  db:
+    image: postgres:15-alpine
+    container_name: hackathon-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: app
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: hackathon-redis
+    ports:
+      - "6379:6379"
+
+  ollama:
+    image: ollama/ollama-alpine
+    container_name: hackathon-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  postgres_data:
+  ollama_data:

@@ -1,0 +1,75 @@
+backend/
+│
+├── src/
+│
+│   ├── server.ts
+│   ├── app.ts
+│
+│   ├── config/
+│   │     env.ts
+│   │     database.ts
+│   │     redis.ts
+│
+│   ├── modules/
+│   │
+│   │   ├── auth/
+│   │   │     auth.controller.ts
+│   │   │     auth.service.ts
+│   │   │     auth.routes.ts
+│   │   │     auth.schema.ts
+│   │
+│   │   ├── users/
+│   │   │     users.controller.ts
+│   │   │     users.service.ts
+│   │   │     users.routes.ts
+│   │
+│   │   ├── ai/
+│   │   │     ai.controller.ts
+│   │   │     ai.service.ts
+│   │   │     ai.routes.ts
+│   │   │     agents/
+│   │   │         planner.agent.ts
+│   │   │         executor.agent.ts
+│   │
+│   │   ├── uploads/
+│   │         upload.controller.ts
+│   │         upload.service.ts
+│   │
+│
+│   ├── routes/
+│   │     index.ts
+│
+│   ├── middleware/
+│   │     auth.middleware.ts
+│   │     error.middleware.ts
+│   │
+│   ├── db/
+│   │     prisma.ts
+│   │     schema.prisma
+│   │
+│   ├── utils/
+│   │     logger.ts
+│   │     helpers.ts
+│   │
+│   └── types/
+│         global.d.ts
+│
+├── tests/
+│
+├── docker/
+│
+├── .env
+├── package.json
+├── tsconfig.json
+└── bun.lockb
+
+
+hackathon-toolkit/
+│
+├── frontend/
+├── backend/
+├── ai-prompts/
+├── lead-scraper/
+├── outreach-engine/
+├── demo-data/
+└── deploy/
