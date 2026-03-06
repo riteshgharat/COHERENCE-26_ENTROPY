@@ -1,21 +1,37 @@
 version: "3.9"
 
 services:
-
   backend:
-    build: ./server
+    build: ./backend
     container_name: hackathon-backend
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgres://postgres:postgres@db:5432/app
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/app
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
     depends_on:
       - db
       - redis
     volumes:
-      - ./server:/app
-    command: bun run dev
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 3000 --reload
+
+  celery-worker:
+    build: ./backend
+    container_name: hackathon-celery
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/app
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./backend:/app
+    command: celery -A workers.celery_app worker --loglevel=info
 
   frontend:
     build: ./client
