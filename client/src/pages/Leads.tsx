@@ -1,0 +1,247 @@
+import { useState, useRef, useEffect } from 'react';
+import {
+  Upload,
+  Search,
+  Filter,
+  Download,
+  MoreHorizontal,
+  Mail,
+  Linkedin,
+  Phone,
+  MapPin,
+  Building2,
+  FileSpreadsheet,
+  Check,
+  Clock,
+  XCircle,
+} from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+
+// The static `leads` array is replaced by a state variable in the component.
+
+const statusConfig = {
+  new: { label: 'New', variant: 'secondary' as const, icon: Clock },
+  contacted: { label: 'Contacted', variant: 'outline' as const, icon: Mail },
+  engaged: { label: 'Engaged', variant: 'default' as const, icon: Check },
+  bounced: { label: 'Bounced', variant: 'destructive' as const, icon: XCircle },
+};
+
+export default function Leads() {
+  const [leads, setLeads] = useState<Record<string, any>[]>([]);
+  const [stats, setStats] = useState([
+    { label: 'Total Leads', value: '0' },
+    { label: 'New Today', value: '0' },
+    { label: 'Engaged', value: '0' },
+    { label: 'Bounced', value: '0' },
+  ]);
+  const [uploading, setUploading] = useState(false);
+
+  const fetchLeads = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/api/v1/leads/');
+      const data = await res.json();
+      if (data.leads) {
+        setLeads(data.leads);
+        const total = data.leads.length;
+        const engaged = data.leads.filter((l: any) => ['replied', 'interested', 'converted'].includes(l.status)).length;
+        const bounced = data.leads.filter((l: any) => l.status === 'not_interested' || l.status === 'bounced').length;
+        const newLeads = data.leads.filter((l: any) => l.status === 'new').length;
+        setStats([
+          { label: 'Total Leads', value: total.toLocaleString() },
+          { label: 'New', value: newLeads.toLocaleString() },
+          { label: 'Engaged', value: engaged.toLocaleString() },
+          { label: 'Bounced', value: bounced.toLocaleString() },
+        ]);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchLeads();
+  }, []);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('http://localhost:8000/api/v1/leads/import', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Import failed');
+      alert(`Imported ${data.total_imported} leads, skipped ${data.total_skipped}`);
+      setShowUpload(false);
+      fetchLeads();
+    } catch (err: any) {
+      alert('Import failed: ' + (err.message || err));
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showUpload, setShowUpload] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const filteredLeads = leads.filter(
+    (l) =>
+      (l.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (l.company || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (l.industry || '').toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-6 animate-fade-in">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {stats.map((s) => (
+          <Card key={s.label}>
+            <CardContent className="p-4">
+              <div className="text-2xl font-extrabold tracking-tight">{s.value}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">{s.label}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <CardTitle className="text-sm font-semibold">Lead Database</CardTitle>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search leads..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-52 pl-9 h-8 text-xs rounded-lg"
+                />
+              </div>
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8 rounded-lg">
+                <Filter size={12} /> Filter
+              </Button>
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8 rounded-lg">
+                <Download size={12} /> Export
+              </Button>
+              <Button size="sm" className="gap-1.5 text-xs h-8 rounded-lg" onClick={() => setShowUpload(!showUpload)}>
+                <Upload size={12} /> Import
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+
+        {showUpload && (
+          <div
+            className="mx-6 mb-4 p-6 border-2 border-dashed border-border rounded-xl bg-muted/30 text-center animate-fade-in"
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const file = e.dataTransfer.files[0];
+              if (file && fileInputRef.current) {
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                fileInputRef.current.files = dt.files;
+                fileInputRef.current.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+            }}
+          >
+            <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.json" className="hidden" onChange={handleFileUpload} />
+            <FileSpreadsheet size={28} className="mx-auto text-muted-foreground mb-3" />
+            <p className="text-sm font-medium">{uploading ? 'Uploading…' : 'Drag & drop your file here'}</p>
+            <p className="text-xs text-muted-foreground mt-1 mb-3">Supports CSV, Excel, and JSON formats</p>
+            <Button variant="outline" size="sm" className="text-xs rounded-lg" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+              {uploading ? 'Uploading…' : 'Browse Files'}
+            </Button>
+          </div>
+        )}
+
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Name</th>
+                  <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Company</th>
+                  <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider hidden md:table-cell">Industry</th>
+                  <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider hidden lg:table-cell">Location</th>
+                  <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
+                  <th className="text-left px-5 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Channels</th>
+                  <th className="px-5 py-2.5"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredLeads.map((lead) => {
+                  const statusKey = (lead.status === 'replied' || lead.status === 'interested' || lead.status === 'converted' ? 'engaged' : lead.status === 'contacted' ? 'contacted' : lead.status === 'not_interested' ? 'bounced' : 'new') as keyof typeof statusConfig;
+                  const status = statusConfig[statusKey] || statusConfig.new;
+                  return (
+                    <tr key={lead.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors group">
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-xl bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0">
+                            {lead.name ? lead.name.split(' ').map((w: string) => w[0]).join('') : '?'}
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium">{lead.name}</div>
+                            <div className="text-[10px] text-muted-foreground">{lead.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-1.5 text-sm">
+                          <Building2 size={12} className="text-muted-foreground" />
+                          {lead.company}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 text-sm text-muted-foreground hidden md:table-cell">{lead.industry}</td>
+                      <td className="px-5 py-3 hidden lg:table-cell">
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <MapPin size={11} />
+                          {lead.location}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3">
+                        <Badge variant={status.variant} className="text-[10px] gap-1">
+                          <status.icon size={10} />
+                          {status.label}
+                        </Badge>
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md opacity-60 hover:opacity-100">
+                            <Mail size={12} />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md opacity-60 hover:opacity-100">
+                            <Linkedin size={12} />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md opacity-60 hover:opacity-100">
+                            <Phone size={12} />
+                          </Button>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3">
+                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
+                          <MoreHorizontal size={14} />
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
