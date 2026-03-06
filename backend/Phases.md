@@ -30,7 +30,7 @@ This document breaks the backend into 3 execution phases, based on `BACKEND.md`.
 ```text
 project-root/
 
-server/
+backend/
 ├── app/
 │   ├── api/
 │   │   ├── leads.py

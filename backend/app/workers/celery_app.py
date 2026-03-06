@@ -25,8 +25,8 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     # Auto-discover task modules
     include=[
-        "workers.workflow_worker",
-        "workers.messaging_worker",
-        "workers.reply_worker",
+        "app.workers.workflow_worker",
+        "app.workers.messaging_worker",
+        "app.workers.reply_worker",
     ],
 )

@@ -83,7 +83,8 @@ class WorkflowEngine:
                 node_id = node_def.get("id")
 
                 execution.current_node_id = node_id
-                self.db.commit()
+                # Only flush to sync ID but don't commit to avoid expiring objects
+                self.db.flush()
 
                 handler = NODE_REGISTRY.get(node_type)
                 if not handler:

@@ -3,7 +3,7 @@ Reply Worker – polls for inbound replies and classifies them.
 Phase 2: full implementation. Phase 1: stub.
 """
 
-from workers.celery_app import celery_app
+from app.workers.celery_app import celery_app
 from app.utils.logger import get_logger
 
 log = get_logger("worker.reply")

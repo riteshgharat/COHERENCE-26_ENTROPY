@@ -26,6 +26,13 @@ async def send_message(
     Create a Message record and dispatch it through the appropriate channel adapter.
     Returns the persisted Message with updated status.
     """
+    import uuid
+
+    if isinstance(lead_id, str):
+        lead_id = uuid.UUID(lead_id)
+    if isinstance(workflow_execution_id, str):
+        workflow_execution_id = uuid.UUID(workflow_execution_id)
+
     msg = Message(
         lead_id=lead_id,
         workflow_execution_id=workflow_execution_id,

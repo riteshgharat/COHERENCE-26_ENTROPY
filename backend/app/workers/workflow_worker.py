@@ -3,7 +3,7 @@ Workflow Worker – Celery task to execute a workflow asynchronously.
 """
 
 import asyncio
-from workers.celery_app import celery_app
+from app.workers.celery_app import celery_app
 from app.database import SessionLocal
 from app.services.workflow_engine import WorkflowEngine
 from app.utils.logger import get_logger
