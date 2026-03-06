@@ -15,7 +15,7 @@ services:
       - redis
     volumes:
       - ./server:/app
-    command: bun run dev
+    command: uvicorn src.main:app --host 0.0.0.0 --port 3000 --reload
 
   frontend:
     build: ./client

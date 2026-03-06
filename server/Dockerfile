@@ -1,13 +1,16 @@
-FROM oven/bun:1-alpine
+FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY package.json bun.lockb ./
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-RUN bun install
+COPY requirements.txt ./
+
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
 EXPOSE 3000
 
-CMD ["bun", "run", "dev"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "3000", "--reload"]
