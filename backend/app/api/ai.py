@@ -61,14 +61,14 @@ async def generate_workflow(payload: WorkflowGenerateRequest):
         return workflow_json
     except ValueError as exc:
         # Config / key errors — tell the user exactly what to fix
-        log.error(f"Workflow generation config error: {exc}")
+        log.warning(f"Workflow generation config error: {exc}")
         raise HTTPException(status_code=400, detail=str(exc))
     except RuntimeError as exc:
         # LLM / parse errors
         log.error(f"Workflow generation runtime error: {exc}")
         raise HTTPException(status_code=502, detail=str(exc))
     except Exception as exc:
-        log.error(f"Workflow generation unexpected error: {exc}", exc_info=True)
+        log.exception(f"Workflow generation unexpected error: {exc}")
         raise HTTPException(status_code=500, detail=f"Unexpected error: {exc}")
 
 
@@ -120,9 +120,9 @@ async def ai_chat(payload: ChatRequest, db: Session = Depends(get_db)):
         settings = get_settings()
 
         if payload.provider == "groq" and settings.GROQ_API_KEY:
-            from groq import Groq
-            client = Groq(api_key=settings.GROQ_API_KEY)
-            response = client.chat.completions.create(
+            from groq import AsyncGroq
+            client = AsyncGroq(api_key=settings.GROQ_API_KEY)
+            response = await client.chat.completions.create(
                 model=settings.AI_MODEL,
                 messages=messages,
                 temperature=0.7,

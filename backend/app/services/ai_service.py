@@ -68,10 +68,10 @@ async def generate_message(
 
 
 async def _call_groq(prompt: str) -> str:
-    from groq import Groq
+    from groq import AsyncGroq
 
-    client = Groq(api_key=settings.GROQ_API_KEY)
-    response = client.chat.completions.create(
+    client = AsyncGroq(api_key=settings.GROQ_API_KEY)
+    response = await client.chat.completions.create(
         model=settings.AI_MODEL,
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
@@ -234,9 +234,9 @@ async def _call_llm_workflow(system: str, user: str, provider: str) -> str:
                 "GROQ_API_KEY is not set. "
                 "Add it to backend/.env: GROQ_API_KEY=gsk_..."
             )
-        from groq import Groq
-        client = Groq(api_key=live.GROQ_API_KEY)
-        response = client.chat.completions.create(
+        from groq import AsyncGroq
+        client = AsyncGroq(api_key=live.GROQ_API_KEY)
+        response = await client.chat.completions.create(
             model=live.AI_MODEL,
             messages=[
                 {"role": "system", "content": system},

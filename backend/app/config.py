@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     # ── AI Providers ──
     GROQ_API_KEY: Optional[str] = None
     GEMINI_API_KEY: Optional[str] = None
-    AI_MODEL: str = "llama3-8b-8192"  # default Groq model
+    AI_MODEL: str = "llama-3.3-70b-versatile"  # default Groq model
 
     # ── Google Sheets ──
     GOOGLE_SHEETS_CREDENTIALS_FILE: Optional[str] = None
