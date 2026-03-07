@@ -102,12 +102,12 @@ async def import_leads(
                 source=source or filename.rsplit(".", 1)[-1],
             )
             db.add(lead)
+            db.commit()
             imported += 1
         except Exception as e:
+            db.rollback()
             skipped += 1
             errors.append(f"Row {idx + 1}: {str(e)}")
-
-    db.commit()
     log.info(f"Imported {imported} leads, skipped {skipped}")
     return LeadImportResponse(
         total_imported=imported, total_skipped=skipped, errors=errors
@@ -196,12 +196,12 @@ async def import_sheets(
                 source="Google Sheets",
             )
             db.add(lead)
+            db.commit()
             imported += 1
         except Exception as e:
+            db.rollback()
             skipped += 1
             errors.append(f"Row {idx + 1}: {str(e)}")
-
-    db.commit()
     log.info(f"Imported {imported} leads from sheets, skipped {skipped}")
     return LeadImportResponse(
         total_imported=imported, total_skipped=skipped, errors=errors

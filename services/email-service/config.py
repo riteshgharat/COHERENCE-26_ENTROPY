@@ -1,26 +1,31 @@
 import os
 from pydantic_settings import BaseSettings
-from dotenv import load_dotenv
-
-load_dotenv()
 
 class Settings(BaseSettings):
-    # SMTP Settings
-    SMTP_HOST: str = os.getenv("SMTP_HOST", "localhost")
-    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
-    SMTP_USER: str = os.getenv("SMTP_USER", "")
-    SMTP_PASS: str = os.getenv("SMTP_PASS", "")
-    SMTP_USE_TLS: bool = os.getenv("SMTP_USE_TLS", "True").lower() == "true"
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str
+    SMTP_PASS: str
+    SMTP_USE_TLS: bool = True
 
-    # IMAP Settings
-    IMAP_HOST: str = os.getenv("IMAP_HOST", "localhost")
-    IMAP_PORT: int = int(os.getenv("IMAP_PORT", "993"))
-    IMAP_USER: str = os.getenv("IMAP_USER", "")
-    IMAP_PASS: str = os.getenv("IMAP_PASS", "")
-    IMAP_USE_SSL: bool = os.getenv("IMAP_USE_SSL", "True").lower() == "true"
+    IMAP_HOST: str = "imap.gmail.com"
+    IMAP_PORT: int = 993
+    IMAP_USER: str | None = None
+    IMAP_PASS: str | None = None
+    IMAP_USE_SSL: bool = True
 
-    # Service Settings
-    PORT: int = int(os.getenv("PORT", "3002"))
-    CHECK_INTERVAL: int = int(os.getenv("CHECK_INTERVAL", "60")) # seconds
+    PORT: int = 3002
+    CHECK_INTERVAL: int = 60
+
+    class Config:
+        env_file = ".env"
+        extra = "ignore"
+
+    def __init__(self, **values):
+        super().__init__(**values)
+        self.SMTP_USER = self.SMTP_USER or os.getenv("SMTP_USERNAME", "")
+        self.SMTP_PASS = self.SMTP_PASS or os.getenv("SMTP_PASSWORD", "")
+        self.IMAP_USER = self.IMAP_USER or self.SMTP_USER
+        self.IMAP_PASS = self.IMAP_PASS or self.SMTP_PASS
 
 settings = Settings()

@@ -23,7 +23,6 @@ async function handleMessage(msg) {
     channel: "whatsapp",
     sender: msg.from.replace("@c.us", ""), // Strip the WhatsApp ID suffix to get phone number
     message_body: msg.body,
-    external_id: msg.id.id,
   };
 
   try {

@@ -69,16 +69,17 @@ async def send_message(
 
     # Try Celery dispatch first
     try:
-        from app.workers.messaging_worker import send_message_task
-        import random
-
-        jitter = random.randint(0, 30)
-        send_message_task.apply_async(args=[str(msg.id)], countdown=jitter)
-        log.info(f"Queued message {msg.id} via Celery with {jitter}s jitter")
-        record_send(channel.value)
+        # Bypassing Celery for local test to force direct execution
+        raise RuntimeError("Bypassing Celery to force direct sending")
+        # from app.workers.messaging_worker import send_message_task
+        # import random
+        # jitter = random.randint(0, 30)
+        # send_message_task.apply_async(args=[str(msg.id)], countdown=jitter)
+        # log.info(f"Queued message {msg.id} via Celery with {jitter}s jitter")
+        # record_send(channel.value)
 
     except Exception as celery_err:
-        log.warning(f"Celery unavailable ({celery_err}), sending directly...")
+        log.warning(f"Celery unavailable or bypassed, sending directly...")
 
         # Direct execution fallback
         try:

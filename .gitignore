@@ -3,7 +3,7 @@
 
 **/.wwebjs_auth
 **/.wwebjs_cache
-
+services/whatsapp-service/.wwebjs_auth
 /server
 
 # ========================

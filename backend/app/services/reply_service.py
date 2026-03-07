@@ -30,7 +30,7 @@ async def classify_reply(reply_text: str) -> str:
             )
             chat_completion = await client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
-                model="llama3-8b-8192",
+                model=settings.AI_MODEL,
                 temperature=0.1,
             )
             classification = chat_completion.choices[0].message.content.strip().lower()

@@ -1,0 +1,23 @@
+== LEAD INFO ==
+ID: 6d886b97-6816-4d68-83fe-989006f119b6
+Name: pd8
+Phone: 918793080701
+Status: LeadStatus.REPLIED
+
+== MESSAGES ==
+[2026-03-06 21:38:12.416000] MessageDirection.INBOUND (MessageChannel.WHATSAPP): Yes I am interested can we schedule a demo
+[2026-03-06 21:39:49.061000] MessageDirection.INBOUND (MessageChannel.WHATSAPP): Yes I am interested can we schedule a demo
+[2026-03-06 21:41:28.094000] MessageDirection.INBOUND (MessageChannel.WHATSAPP): Hello
+[2026-03-06 21:42:03.736000] MessageDirection.INBOUND (MessageChannel.WHATSAPP): Yes I am interested can we schedule a demo
+[2026-03-06 21:57:08.239000] MessageDirection.INBOUND (MessageChannel.WHATSAPP): Hello
+[2026-03-06 22:02:13.826000] MessageDirection.INBOUND (MessageChannel.WHATSAPP): Hello
+[2026-03-06 22:06:18.105000] MessageDirection.INBOUND (MessageChannel.WHATSAPP): Yes I am interested can we schedule a demo
+[2026-03-06 22:06:19.369000] MessageDirection.OUTBOUND (MessageChannel.WHATSAPP): Hi pd8, thanks for your interest in learning more about our solutions for ghuh. I'd be happy to schedule a demo, but before we do, can we schedule a quick 10-minute discovery call to discuss your current needs and goals? This will help us tailor the demo to your specific requirements. Would you be available for a call this week or next?
+[2026-03-06 22:06:39.838000] MessageDirection.INBOUND (MessageChannel.WHATSAPP): This week ?
+[2026-03-06 22:06:40.845000] MessageDirection.OUTBOUND (MessageChannel.WHATSAPP): This week works perfectly. How about Wednesday or Thursday at your convenience? I've got a few time slots available, and we can schedule a 10-minute discovery call to discuss your current needs and goals at ghuh. Would you prefer morning or afternoon?
+[2026-03-06 22:07:35.739000] MessageDirection.INBOUND (MessageChannel.WHATSAPP): Morning will be good
+[2026-03-06 22:07:36.603000] MessageDirection.OUTBOUND (MessageChannel.WHATSAPP): I'm glad morning works for you. How about we schedule our 10-minute discovery call for Wednesday at 10:00 AM or Thursday at 9:30 AM? Both time slots are available, and we can discuss your current needs and goals at ghuh. Let me know which one you prefer, or if you'd like me to suggest an alternative time.
+[2026-03-06 22:09:12.725000] MessageDirection.INBOUND (MessageChannel.WHATSAPP): I think evening 5 tomorrow will be good
+[2026-03-06 22:09:13.730000] MessageDirection.OUTBOUND (MessageChannel.WHATSAPP): I've got you down for tomorrow at 5:00 PM. I'm looking forward to our 10-minute discovery call to discuss your current needs and goals at ghuh. Is there anything specific you'd like to cover during our call, or would you like me to guide the conversation?
+[2026-03-06 22:09:41.199000] MessageDirection.INBOUND (MessageChannel.WHATSAPP): OK can u confirm the meeeting
+[2026-03-06 22:09:42.107000] MessageDirection.OUTBOUND (MessageChannel.WHATSAPP): I'd be happy to confirm our meeting. Yes, we're all set for tomorrow at 5:00 PM. I'm looking forward to our 10-minute discovery call to discuss your current needs and goals at ghuh. If you'd like to make any changes or have any questions, feel free to let me know. Otherwise, I'll talk to you tomorrow at 5:00 PM.

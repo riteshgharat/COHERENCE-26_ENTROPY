@@ -18,10 +18,9 @@ log = get_logger("api.webhooks")
 
 
 class InboundReplyPayload(BaseModel):
-    # Strict mode (internal/manual): supply lead_id directly
     lead_id: Optional[UUID] = None
     channel: MessageChannel
-    body: str
+    body: Optional[str] = None
     # Loose mode (from WhatsApp/LinkedIn services): identify lead by contact info
     sender: Optional[str] = None       # phone number from WhatsApp
     message_body: Optional[str] = None # alternate body field from WhatsApp
@@ -29,7 +28,11 @@ class InboundReplyPayload(BaseModel):
 
 
 @router.post("/reply")
-def receive_reply(payload: InboundReplyPayload, db: Session = Depends(get_db)):
+def receive_reply(
+    payload: InboundReplyPayload, 
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
     """
     Receives an inbound reply from any channel service.
     Supports both direct lead_id lookup and fuzzy lookup by phone/email.
@@ -79,7 +82,8 @@ def receive_reply(payload: InboundReplyPayload, db: Session = Depends(get_db)):
 
     log.info(f"Received {payload.channel} reply from {lead.email or str(lead.id)}")
 
-    # Dispatch to Celery for AI classification + conversation response
-    process_inbound_reply_task.delay(str(msg.id))
+    # Dispatch to background task for AI classification + conversation response
+    from app.workers.reply_worker import process_reply_logic
+    background_tasks.add_task(process_reply_logic, str(msg.id))
 
     return {"status": "ok", "message_id": str(msg.id), "lead_id": str(lead.id)}

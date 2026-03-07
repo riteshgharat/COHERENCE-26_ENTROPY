@@ -4,7 +4,6 @@ import {
   Search,
   Filter,
   Download,
-  MoreHorizontal,
   Mail,
   Linkedin,
   Phone,
@@ -38,6 +37,7 @@ export default function Leads() {
     { label: 'Bounced', value: '0' },
   ]);
   const [uploading, setUploading] = useState(false);
+  const [storeInDb, setStoreInDb] = useState(true);
 
   const fetchLeads = async () => {
     try {
@@ -61,6 +61,16 @@ export default function Leads() {
     }
   };
 
+  const handleDelete = async (id: string) => {
+    try {
+      await fetch(`http://localhost:8000/api/v1/leads/${id}`, { method: 'DELETE' });
+      setLeads((prev) => prev.filter((l) => l.id !== id));
+      fetchLeads();
+    } catch (err) {
+      console.error('Delete failed:', err);
+    }
+  };
+
   useEffect(() => {
     fetchLeads();
   }, []);
@@ -70,17 +80,35 @@ export default function Leads() {
     if (!file) return;
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('http://localhost:8000/api/v1/leads/import', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Import failed');
-      alert(`Imported ${data.total_imported} leads, skipped ${data.total_skipped}`);
+      if (storeInDb) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('http://localhost:8000/api/v1/leads/import', {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Import failed');
+        alert(`Imported ${data.total_imported} leads, skipped ${data.total_skipped}`);
+        fetchLeads();
+      } else {
+        // Simple frontend CSV parsing
+        const text = await file.text();
+        const rows = text.split('\n').filter(r => r.trim());
+        const headers = rows[0].split(',').map(h => h.trim().toLowerCase());
+        
+        const newLeads = rows.slice(1).map((row, idx) => {
+          const values = row.split(',');
+          const lead: any = { id: `temp-${Date.now()}-${idx}`, status: 'new' };
+          headers.forEach((header, i) => {
+            lead[header] = values[i]?.trim();
+          });
+          return lead;
+        });
+        setLeads(prev => [...prev, ...newLeads]);
+        alert(`Parsed ${newLeads.length} leads in browser only.`);
+      }
       setShowUpload(false);
-      fetchLeads();
     } catch (err: any) {
       alert('Import failed: ' + (err.message || err));
     } finally {
@@ -160,6 +188,20 @@ export default function Leads() {
             <FileSpreadsheet size={28} className="mx-auto text-muted-foreground mb-3" />
             <p className="text-sm font-medium">{uploading ? 'Uploading…' : 'Drag & drop your file here'}</p>
             <p className="text-xs text-muted-foreground mt-1 mb-3">Supports CSV, Excel, and JSON formats</p>
+            
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <input
+                type="checkbox"
+                id="storeInDb"
+                checked={storeInDb}
+                onChange={(e) => setStoreInDb(e.target.checked)}
+                className="rounded border-border"
+              />
+              <label htmlFor="storeInDb" className="text-xs font-medium cursor-pointer">
+                Store imported leads in Database
+              </label>
+            </div>
+
             <Button variant="outline" size="sm" className="text-xs rounded-lg" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
               {uploading ? 'Uploading…' : 'Browse Files'}
             </Button>
@@ -184,8 +226,9 @@ export default function Leads() {
                 {filteredLeads.map((lead) => {
                   const statusKey = (lead.status === 'replied' || lead.status === 'interested' || lead.status === 'converted' ? 'engaged' : lead.status === 'contacted' ? 'contacted' : lead.status === 'not_interested' ? 'bounced' : 'new') as keyof typeof statusConfig;
                   const status = statusConfig[statusKey] || statusConfig.new;
+                  const isInterested = lead.status === 'interested';
                   return (
-                    <tr key={lead.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors group">
+                    <tr key={lead.id} className={`border-b border-border last:border-0 hover:bg-muted/30 transition-colors group ${isInterested ? 'bg-yellow-100/50 dark:bg-yellow-900/20' : ''}`}>
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
                           <div className="h-8 w-8 rounded-xl bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0">
@@ -230,8 +273,14 @@ export default function Leads() {
                         </div>
                       </td>
                       <td className="px-5 py-3">
-                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
-                          <MoreHorizontal size={14} />
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-6 w-6 rounded-md opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive hover:bg-destructive/10 transition-opacity"
+                          onClick={() => handleDelete(lead.id)}
+                          title="Delete Lead"
+                        >
+                          <XCircle size={14} />
                         </Button>
                       </td>
                     </tr>

@@ -70,8 +70,27 @@ async function sendMessage(to, text) {
     );
   }
 
+  console.log(`Preparing to send message to JID: ${chatId}`);
+  
+  // Get chat object to access typing indicator
+  const chat = await client.getChatById(chatId);
+  
+  // Calculate dynamic typing delay (e.g., 50ms per character, min 1s, max 8s)
+  const typingDelay = Math.min(Math.max(text.length * 50, 1000), 8000);
+  
+  console.log(`Simulating typing for ${typingDelay}ms...`);
+  await chat.sendStateTyping();
+  
+  // Wait to simulate typing
+  await new Promise(resolve => setTimeout(resolve, typingDelay));
+
+  // Sending the message
   console.log(`Sending to JID: ${chatId}`);
   const response = await client.sendMessage(chatId, text);
+  
+  // Clear typing state
+  await chat.clearState();
+  
   return response.id.id;
 }
 

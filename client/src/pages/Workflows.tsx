@@ -57,12 +57,12 @@ const nodeTypes = {
   lead_upload: BaseNode,
   ai_message: BaseNode,
   send_message: BaseNode,
-  delay: BaseNode,
   reply_check: BaseNode,
   follow_up: BaseNode,
   update_crm: BaseNode,
   analytics: BaseNode,
   ai_conversation: BaseNode,
+  sheets_import: BaseNode,
 };
 
 const edgeTypes = {
@@ -119,7 +119,8 @@ const toolGroups: ToolGroup[] = [
     icon: BarChart3,
     items: [
       { type: 'lead_upload', label: 'Lead Upload', icon: Upload, description: 'Import CSV / Excel', color: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400' },
-      { type: 'update_crm', label: 'Update CRM', icon: Database, description: 'Sync to CRM', color: 'bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-400' },
+      { type: 'sheets_import', label: 'Google Sheets', icon: Database, description: 'Import from Sheets URL', color: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400' },
+      { type: 'update_crm', label: 'Update CRM', icon: Database, description: 'Sync back to sheets', color: 'bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-400' },
       { type: 'analytics', label: 'Analytics', icon: BarChart3, description: 'Track metrics', color: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400' },
     ],
   },
@@ -129,11 +130,11 @@ const edgeColor = 'oklch(0.4 0 0)';
 
 const defaultNodes: Node[] = [
   { id: '1', type: 'start', position: { x: 400, y: 40 }, data: {} },
-  { id: '2', type: 'lead_upload', position: { x: 370, y: 160 }, data: { label: 'Import Leads', industry: '', status: '' } },
+  { id: '2', type: 'sheets_import', position: { x: 370, y: 160 }, data: { label: 'Import from Sheets', spreadsheet_id: '', worksheet_name: 'Sheet1' } },
   { id: '3', type: 'ai_message', position: { x: 360, y: 310 }, data: { label: 'Personalize Intro', tone: 'warm and personal', sample_message: 'Generate a warm intro email', subject: 'Hi {name}, quick intro', provider: 'groq' } },
   { id: '4', type: 'send_message', position: { x: 370, y: 470 }, data: { label: 'Send Intro Email', channel: 'email', subject: '' } },
   { id: '5', type: 'delay', position: { x: 390, y: 620 }, data: { label: 'Wait 2 Hours', delay_seconds: 7200 } },
-  { id: '6', type: 'reply_check', position: { x: 370, y: 770 }, data: { label: 'Got Reply?', timeout_hours: 48 } },
+  { id: '6', type: 'reply_check', position: { x: 370, y: 770 }, data: { label: 'Got Reply?', timeout_seconds: 30 } },
   { id: '7', type: 'follow_up', position: { x: 140, y: 940 }, data: { label: 'Follow Up', tone: 'polite and brief', max_attempts: 2, provider: 'groq' } },
   { id: '8', type: 'update_crm', position: { x: 560, y: 940 }, data: { label: 'Mark Engaged', spreadsheet_id: '', worksheet_name: 'Sheet1' } },
   { id: '9', type: 'end', position: { x: 400, y: 1100 }, data: {} },
@@ -331,9 +332,12 @@ export default function WorkflowEditor() {
         ),
       );
 
-    // BFS traversal — sequential with 700ms per node
+    // BFS traversal — sequentially execute nodes
     const visited = new Set<string>();
     let queue = [startNode.id];
+
+    let currentLeads: any[] = [];
+    let generatedMessage = "Hello from AI";
 
     while (queue.length > 0) {
       const [nodeId, ...rest] = queue;
@@ -341,13 +345,114 @@ export default function WorkflowEditor() {
       if (visited.has(nodeId)) continue;
       visited.add(nodeId);
 
+      const nodeData = nodes.find(n => n.id === nodeId)?.data || {};
+      const nodeType = nodes.find(n => n.id === nodeId)?.type;
+
       markNode(nodeId, { _executing: true, _done: false });
-      // eslint-disable-next-line no-await-in-loop
-      await new Promise<void>((r) => setTimeout(r, 700));
+      
+      try {
+        if (nodeType === 'lead_upload' || nodeType === 'sheets_import') {
+          const storeInDb = nodeData.store_in_db !== 'no';
+          
+          if (storeInDb) {
+            // Fetch leads from backend
+            const res = await fetch('http://localhost:8000/api/v1/leads/?page_size=10');
+            if (res.ok) {
+              const data = await res.json();
+              currentLeads = data.leads || [];
+            }
+          } else {
+            console.log("Mocking lead ingestion in-memory (DB bypassed)");
+            currentLeads = [
+              { id: 'mem-1', name: 'Demo Lead 1', email: 'demo1@example.com', status: 'new' },
+              { id: 'mem-2', name: 'Demo Lead 2', email: 'demo2@example.com', status: 'new' },
+              { id: 'mem-3', name: 'Demo Lead 3', email: 'demo3@example.com', status: 'new' },
+            ];
+          }
+          await new Promise<void>((r) => setTimeout(r, nodeType === 'sheets_import' ? 1500 : 700));
+        }
+        else if (nodeType === 'ai_message') {
+          // Generate a preview message via backend AI endpoint
+          if (currentLeads.length > 0) {
+            const res = await fetch('http://localhost:8000/api/v1/ai/preview-message', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                lead_data: currentLeads[0], 
+                tone: nodeData.tone, 
+                sample_message: nodeData.sample_message,
+                provider: nodeData.provider
+              })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              generatedMessage = data.message;
+            }
+          }
+          await new Promise<void>((r) => setTimeout(r, 800));
+        }
+        else if (nodeType === 'send_message') {
+          // Send message to microservices based on channel
+          const isWhatsApp = nodeData.channel === 'whatsapp';
+          const isEmail = nodeData.channel === 'email';
+          
+          if (isWhatsApp || isEmail) {
+            const port = isWhatsApp ? 3000 : 3002;
+            const payload = {
+              leads: currentLeads.length > 0 ? currentLeads : undefined,
+              subject: nodeData.subject || generatedMessage.substring(0, 30),
+              message: generatedMessage || nodeData.subject || 'Hello',
+              backendUrl: 'http://127.0.0.1:8000'
+            };
+            
+            await fetch(`http://localhost:${port}/broadcast`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            }).catch(e => console.error("Broadcast failed", e));
+          } else {
+            // Delay for linkedin
+            await new Promise<void>((r) => setTimeout(r, 1000));
+          }
+        }
+        else if (nodeType === 'update_crm') {
+          // Simulate updating Google Sheets
+          console.log(`Updating Google Sheet ${nodeData.spreadsheet_id || 'CRM'}...`);
+          await new Promise<void>((r) => setTimeout(r, 1200));
+        }
+        else if (nodeType === 'reply_check') {
+          // Simulate waiting for reply based on timeout in seconds
+          const timeout = nodeData.timeout_seconds || 30;
+          console.log(`Waiting for reply with timeout of ${timeout} seconds...`);
+          await new Promise<void>((r) => setTimeout(r, 2000)); // Fast-forwarded
+        }
+        else if (nodeType === 'delay') {
+          // Fast-forward delay for demo
+          await new Promise<void>((r) => setTimeout(r, 600));
+        }
+        else {
+          // generic delay for others
+          await new Promise<void>((r) => setTimeout(r, 700));
+        }
+      } catch (err) {
+        console.error(`Error executing node ${nodeId}:`, err);
+      }
+
       markNode(nodeId, { _executing: false, _done: true });
 
       const targets = adj.get(nodeId) || [];
-      queue.push(...targets.filter((t) => !visited.has(t)));
+      
+      // Node branching
+      if (nodeType === 'reply_check') {
+         // Randomly decide yes or no for the demo
+         const handle = Math.random() > 0.5 ? 'yes' : 'no';
+         const branchingEdges = edges.filter(e => e.source === nodeId && e.sourceHandle === handle);
+         const targetNodes = branchingEdges.map(e => e.target);
+         queue.push(...targetNodes.filter((t) => !visited.has(t)));
+      } else {
+         queue.push(...targets.filter((t) => !visited.has(t)));
+      }
+      
     }
 
     // Clear done state after a brief pause

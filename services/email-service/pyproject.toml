@@ -12,6 +12,7 @@ dependencies = [
     "aiosmtplib",
     "beautifulsoup4",
     "pydantic-settings>=2.13.1",
+    "httpx>=0.28.1",
 ]
 
 [tool.uv]
