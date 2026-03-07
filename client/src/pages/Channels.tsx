@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_URL } from '@/lib/api';
 import {
   Mail,
   Linkedin,
@@ -88,7 +89,7 @@ export default function Channels() {
   const [channelStatuses, setChannelStatuses] = useState<any[]>([]);
 
   const fetchStatuses = () => {
-    fetch('http://localhost:8000/api/v1/channels/status')
+    fetch(`${API_URL}/api/v1/channels/status`)
       .then(res => res.json())
       .then(data => {
         // Backend returns an array of {channel, connected, daily_sent, daily_limit}

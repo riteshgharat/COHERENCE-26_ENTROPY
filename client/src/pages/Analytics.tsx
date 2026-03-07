@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react';
+import { API_URL } from '@/lib/api';
 import {
   BarChart,
   Bar,
@@ -17,60 +19,70 @@ import {
   Target,
   ArrowUpRight,
   ArrowDownRight,
+  Loader2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
-const overviewStats = [
-  { icon: Mail, label: 'Total Sent', value: '48,293', change: '+12.4%', up: true },
-  { icon: Eye, label: 'Total Opens', value: '28,176', change: '+8.1%', up: true },
-  { icon: MessageCircle, label: 'Total Replies', value: '9,847', change: '+15.3%', up: true },
-  { icon: Target, label: 'Conversion Rate', value: '6.8%', change: '-0.4%', up: false },
-];
-
-const weeklyData = [
-  { week: 'W1', sent: 6200, opens: 3540, replies: 1120 },
-  { week: 'W2', sent: 7100, opens: 4280, replies: 1450 },
-  { week: 'W3', sent: 6800, opens: 3890, replies: 1380 },
-  { week: 'W4', sent: 8400, opens: 5120, replies: 1890 },
-  { week: 'W5', sent: 7600, opens: 4560, replies: 1620 },
-  { week: 'W6', sent: 9200, opens: 5780, replies: 2180 },
-  { week: 'W7', sent: 8100, opens: 4890, replies: 1720 },
-  { week: 'W8', sent: 9800, opens: 6120, replies: 2340 },
-];
-
-const channelData = [
-  { name: 'Email', value: 62, color: 'oklch(0.85 0 0)' },
-  { name: 'LinkedIn', value: 24, color: 'oklch(0.55 0 0)' },
-  { name: 'WhatsApp', value: 10, color: 'oklch(0.35 0 0)' },
-  { name: 'X', value: 4, color: 'oklch(0.2 0 0)' },
-];
-
-const industryPerformance = [
-  { industry: 'SaaS', replyRate: 38, leads: 3200 },
-  { industry: 'Fintech', replyRate: 34, leads: 2100 },
-  { industry: 'DevTools', replyRate: 31, leads: 1800 },
-  { industry: 'AI/ML', replyRate: 42, leads: 1400 },
-  { industry: 'E-commerce', replyRate: 22, leads: 2800 },
-  { industry: 'Healthcare', replyRate: 18, leads: 900 },
-];
-
-const funnelData = [
-  { stage: 'Leads', value: 12847 },
-  { stage: 'Contacted', value: 9200 },
-  { stage: 'Opened', value: 5800 },
-  { stage: 'Replied', value: 2100 },
-  { stage: 'Converted', value: 870 },
-];
-
-const bestMessages = [
-  { template: 'Warm intro with company mention', opens: 78, replies: 34, score: 92 },
-  { template: 'Value-first with case study', opens: 72, replies: 31, score: 88 },
-  { template: 'Short & direct ask', opens: 65, replies: 28, score: 82 },
-  { template: 'Mutual connection reference', opens: 81, replies: 26, score: 79 },
-];
+const CHANNEL_COLORS: Record<string, string> = {
+  email: 'oklch(0.85 0 0)',
+  linkedin: 'oklch(0.55 0 0)',
+  whatsapp: 'oklch(0.35 0 0)',
+};
 
 export default function Analytics() {
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<any>(null);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/v1/analytics/dashboard`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => setStats(data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin text-muted-foreground" size={24} />
+      </div>
+    );
+  }
+
+  const sent = stats?.messages_sent ?? 0;
+  const replies = stats?.replies ?? 0;
+  const convRate = stats?.conversion_rate ?? 0;
+  const leads = stats?.leads ?? 0;
+
+  const overviewStats = [
+    { icon: Mail, label: 'Total Sent', value: sent.toLocaleString(), change: sent > 0 ? `+${sent}` : '0', up: sent > 0 },
+    { icon: Eye, label: 'Total Leads', value: leads.toLocaleString(), change: leads > 0 ? `+${leads}` : '0', up: leads > 0 },
+    { icon: MessageCircle, label: 'Total Replies', value: replies.toLocaleString(), change: replies > 0 ? `+${replies}` : '0', up: replies > 0 },
+    { icon: Target, label: 'Response Rate', value: `${convRate}%`, change: convRate > 0 ? `+${convRate}%` : '0%', up: convRate > 0 },
+  ];
+
+  const weeklyData = stats?.weekly_chart?.length
+    ? stats.weekly_chart
+    : Array.from({ length: 8 }, (_, i) => ({ week: `W${i + 1}`, sent: 0, opens: 0, replies: 0 }));
+
+  // Channel distribution from real data
+  const channelPerf = stats?.channel_performance || {};
+  const channelEntries = Object.entries(channelPerf);
+  const totalChannelMsgs = channelEntries.reduce((s: number, [, v]: any) => s + (v.sent || 0) + (v.replied || 0) + (v.pending || 0), 0) || 1;
+  const channelData = channelEntries.length > 0
+    ? channelEntries.map(([name, v]: any) => {
+        const total = (v.sent || 0) + (v.replied || 0) + (v.pending || 0);
+        return { name: name.charAt(0).toUpperCase() + name.slice(1), value: Math.round((total / totalChannelMsgs) * 100), color: CHANNEL_COLORS[name] || 'oklch(0.6 0 0)' };
+      })
+    : [{ name: 'Email', value: 60, color: 'oklch(0.85 0 0)' }, { name: 'LinkedIn', value: 25, color: 'oklch(0.55 0 0)' }, { name: 'WhatsApp', value: 15, color: 'oklch(0.35 0 0)' }];
+
+  const industryPerformance = stats?.industry_breakdown ?? [];
+  const funnelData = stats?.funnel?.length
+    ? stats.funnel
+    : [{ stage: 'Leads', value: leads }, { stage: 'Contacted', value: 0 }, { stage: 'Opened', value: 0 }, { stage: 'Replied', value: replies }, { stage: 'Converted', value: 0 }];
+  const bestMessages = stats?.best_messages ?? [];
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-fade-in">
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -178,22 +190,28 @@ export default function Analytics() {
             <CardTitle className="text-sm font-semibold">Industry Reply Rates</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={industryPerformance} layout="vertical" barSize={14}>
-                <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.3 0 0)" opacity={0.2} />
-                <XAxis type="number" tick={{ fontSize: 11 }} stroke="oklch(0.55 0 0)" unit="%" />
-                <YAxis dataKey="industry" type="category" tick={{ fontSize: 11 }} stroke="oklch(0.55 0 0)" width={80} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'oklch(0.12 0 0)',
-                    border: '1px solid oklch(0.2 0 0)',
-                    borderRadius: '0.75rem',
-                    fontSize: '12px',
-                  }}
-                />
-                <Bar dataKey="replyRate" fill="oklch(0.45 0 0)" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {industryPerformance.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={industryPerformance} layout="vertical" barSize={14}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.3 0 0)" opacity={0.2} />
+                  <XAxis type="number" tick={{ fontSize: 11 }} stroke="oklch(0.55 0 0)" unit="%" />
+                  <YAxis dataKey="industry" type="category" tick={{ fontSize: 11 }} stroke="oklch(0.55 0 0)" width={80} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'oklch(0.12 0 0)',
+                      border: '1px solid oklch(0.2 0 0)',
+                      borderRadius: '0.75rem',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <Bar dataKey="replyRate" fill="oklch(0.45 0 0)" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
+                Import leads with industry data to see reply rates
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -202,7 +220,7 @@ export default function Analytics() {
             <CardTitle className="text-sm font-semibold">Best Performing Messages</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {bestMessages.map((msg, i) => (
+            {bestMessages.length > 0 ? bestMessages.map((msg: any, i: number) => (
               <div key={i} className="p-3 rounded-xl bg-muted/40 hover:bg-muted/60 transition-colors">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium">{msg.template}</span>
@@ -213,7 +231,11 @@ export default function Analytics() {
                   <span className="flex items-center gap-1"><MessageCircle size={10} /> {msg.replies}% reply</span>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="h-32 flex items-center justify-center text-sm text-muted-foreground">
+                Send messages to see performance data
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -224,8 +246,8 @@ export default function Analytics() {
         </CardHeader>
         <CardContent>
           <div className="flex items-end justify-between gap-4 h-40">
-            {funnelData.map((stage, i) => {
-              const maxVal = funnelData[0].value;
+            {funnelData.map((stage: any, i: number) => {
+              const maxVal = Math.max(...funnelData.map((s: any) => s.value), 1);
               const heightPct = (stage.value / maxVal) * 100;
               return (
                 <div key={stage.stage} className="flex-1 flex flex-col items-center gap-2">
@@ -233,7 +255,7 @@ export default function Analytics() {
                   <div
                     className="w-full rounded-t-lg transition-all duration-500"
                     style={{
-                      height: `${heightPct}%`,
+                      height: `${Math.max(heightPct, 2)}%`,
                       background: `oklch(${0.85 - (i * 0.15)} 0 0)`,
                     }}
                   />

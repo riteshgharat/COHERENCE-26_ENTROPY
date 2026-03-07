@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { API_URL } from '@/lib/api';
 import {
   Upload,
   Search,
@@ -13,6 +14,9 @@ import {
   Check,
   Clock,
   XCircle,
+  ChevronDown,
+  ChevronUp,
+  MessageSquare,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,7 +45,7 @@ export default function Leads() {
 
   const fetchLeads = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/v1/leads/');
+      const res = await fetch(`${API_URL}/api/v1/leads/`);
       const data = await res.json();
       if (data.leads) {
         setLeads(data.leads);
@@ -63,7 +67,7 @@ export default function Leads() {
 
   const handleDelete = async (id: string) => {
     try {
-      await fetch(`http://localhost:8000/api/v1/leads/${id}`, { method: 'DELETE' });
+      await fetch(`${API_URL}/api/v1/leads/${id}`, { method: 'DELETE' });
       setLeads((prev) => prev.filter((l) => l.id !== id));
       fetchLeads();
     } catch (err) {
@@ -83,7 +87,7 @@ export default function Leads() {
       if (storeInDb) {
         const formData = new FormData();
         formData.append('file', file);
-        const res = await fetch('http://localhost:8000/api/v1/leads/import', {
+        const res = await fetch(`${API_URL}/api/v1/leads/import`, {
           method: 'POST',
           body: formData,
         });
@@ -120,6 +124,30 @@ export default function Leads() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showUpload, setShowUpload] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [expandedLead, setExpandedLead] = useState<string | null>(null);
+  const [leadMessages, setLeadMessages] = useState<Record<string, any[]>>({});
+
+  const fetchMessages = async (leadId: string) => {
+    if (leadMessages[leadId]) return;
+    try {
+      const res = await fetch(`${API_URL}/api/v1/leads/${leadId}/messages`);
+      if (res.ok) {
+        const data = await res.json();
+        setLeadMessages((prev) => ({ ...prev, [leadId]: data.messages || [] }));
+      }
+    } catch (err) {
+      console.error('Failed to fetch messages:', err);
+    }
+  };
+
+  const toggleExpand = (leadId: string) => {
+    if (expandedLead === leadId) {
+      setExpandedLead(null);
+    } else {
+      setExpandedLead(leadId);
+      fetchMessages(leadId);
+    }
+  };
 
   const filteredLeads = leads.filter(
     (l) =>
@@ -227,8 +255,12 @@ export default function Leads() {
                   const statusKey = (lead.status === 'replied' || lead.status === 'interested' || lead.status === 'converted' ? 'engaged' : lead.status === 'contacted' ? 'contacted' : lead.status === 'not_interested' ? 'bounced' : 'new') as keyof typeof statusConfig;
                   const status = statusConfig[statusKey] || statusConfig.new;
                   const isInterested = lead.status === 'interested';
+                  const isEngaged = statusKey === 'engaged';
+                  const isExpanded = expandedLead === lead.id;
+                  const messages = leadMessages[lead.id] || [];
                   return (
-                    <tr key={lead.id} className={`border-b border-border last:border-0 hover:bg-muted/30 transition-colors group ${isInterested ? 'bg-yellow-100/50 dark:bg-yellow-900/20' : ''}`}>
+                    <React.Fragment key={lead.id}>
+                    <tr className={`border-b border-border last:border-0 hover:bg-muted/30 transition-colors group ${isInterested ? 'bg-yellow-100/50 dark:bg-yellow-900/20' : ''}`}>
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
                           <div className="h-8 w-8 rounded-xl bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0">
@@ -273,17 +305,63 @@ export default function Leads() {
                         </div>
                       </td>
                       <td className="px-5 py-3">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-6 w-6 rounded-md opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive hover:bg-destructive/10 transition-opacity"
-                          onClick={() => handleDelete(lead.id)}
-                          title="Delete Lead"
-                        >
-                          <XCircle size={14} />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          {isEngaged && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 rounded-md opacity-60 hover:opacity-100 text-primary"
+                              onClick={() => toggleExpand(lead.id)}
+                              title="View messages"
+                            >
+                              {isExpanded ? <ChevronUp size={14} /> : <MessageSquare size={14} />}
+                            </Button>
+                          )}
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-6 w-6 rounded-md opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive hover:bg-destructive/10 transition-opacity"
+                            onClick={() => handleDelete(lead.id)}
+                            title="Delete Lead"
+                          >
+                            <XCircle size={14} />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
+                    {isEngaged && isExpanded && (
+                      <tr className="bg-muted/20">
+                        <td colSpan={7} className="px-5 py-3">
+                          <div className="text-xs font-semibold mb-2 flex items-center gap-1.5">
+                            <MessageSquare size={12} /> Message Summary
+                          </div>
+                          {messages.length === 0 ? (
+                            <p className="text-[11px] text-muted-foreground italic">No messages yet</p>
+                          ) : (
+                            <div className="space-y-2 max-h-48 overflow-y-auto">
+                              {messages.map((msg: any) => (
+                                <div key={msg.id} className="flex gap-2 text-[11px] p-2 rounded-lg bg-card border border-border">
+                                  <Badge variant="outline" className="text-[9px] h-4 shrink-0">
+                                    {msg.direction === 'inbound' ? '← In' : '→ Out'}
+                                  </Badge>
+                                  <Badge variant="secondary" className="text-[9px] h-4 shrink-0 capitalize">
+                                    {msg.channel}
+                                  </Badge>
+                                  <span className="text-muted-foreground truncate flex-1">
+                                    {msg.subject ? <strong>{msg.subject}: </strong> : null}
+                                    {msg.body?.slice(0, 120)}{msg.body?.length > 120 ? '…' : ''}
+                                  </span>
+                                  <span className="text-muted-foreground/60 shrink-0">
+                                    {msg.sent_at ? new Date(msg.sent_at).toLocaleDateString() : ''}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>

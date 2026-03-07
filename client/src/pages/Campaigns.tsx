@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_URL } from '@/lib/api';
 import {
   Play,
   Pause,
@@ -60,14 +61,14 @@ export default function Campaigns() {
 
   useEffect(() => {
     fetchCampaigns();
-    fetch('http://localhost:8000/api/v1/workflows/')
+    fetch(`${API_URL}/api/v1/workflows/`)
       .then((r) => r.json())
       .then((d) => setWorkflows(d.workflows || []))
       .catch(console.error);
   }, []);
 
   const fetchCampaigns = () => {
-    fetch('http://localhost:8000/api/v1/campaigns/')
+    fetch(`${API_URL}/api/v1/campaigns/`)
       .then((r) => r.json())
       .then((d) => setCampaigns(d.campaigns || []))
       .catch(console.error);
@@ -76,7 +77,7 @@ export default function Campaigns() {
   const handleCreate = async () => {
     if (!newName || !selectedWorkflow) return;
     try {
-      await fetch('http://localhost:8000/api/v1/campaigns/', {
+      await fetch(`${API_URL}/api/v1/campaigns/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName, workflow_id: selectedWorkflow }),
@@ -92,7 +93,7 @@ export default function Campaigns() {
 
   const handleStart = async (id: string) => {
     try {
-      await fetch(`http://localhost:8000/api/v1/campaigns/${id}/start`, {
+      await fetch(`${API_URL}/api/v1/campaigns/${id}/start`, {
         method: 'POST',
       });
       fetchCampaigns();
@@ -103,7 +104,7 @@ export default function Campaigns() {
 
   const handlePause = async (id: string) => {
     try {
-      await fetch(`http://localhost:8000/api/v1/campaigns/${id}/pause`, {
+      await fetch(`${API_URL}/api/v1/campaigns/${id}/pause`, {
         method: 'POST',
       });
       fetchCampaigns();

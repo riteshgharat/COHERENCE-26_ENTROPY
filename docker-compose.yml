@@ -53,6 +53,15 @@ services:
     volumes:
       - ollama_data:/root/.ollama
 
+  collab-server:
+    build: ./services/collab-server
+    container_name: hackathon-collab
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   ollama_data:

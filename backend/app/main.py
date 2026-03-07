@@ -20,6 +20,7 @@ from app.api import (
     analytics_router,
     ai_router,
     campaigns_router,
+    collab_router,
 )
 from app.api.webhooks import router as webhooks_router
 from app.utils.logger import get_logger
@@ -55,8 +56,8 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Tighten in production
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -71,6 +72,7 @@ app.include_router(analytics_router, prefix=API_PREFIX)
 app.include_router(ai_router, prefix=API_PREFIX)
 app.include_router(campaigns_router, prefix=API_PREFIX)
 app.include_router(webhooks_router, prefix=API_PREFIX)
+app.include_router(collab_router, prefix=API_PREFIX)
 
 
 # ── Health & Root ──

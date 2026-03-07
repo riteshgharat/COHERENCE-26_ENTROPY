@@ -19,8 +19,8 @@ export default function App() {
           <Route path="/" element={<Overview />} />
           <Route path="/workflows" element={<WorkflowsPage />} />
           <Route path="/workflows/new" element={<Workflows />} />
-          <Route path="/workflows/:id" element={<WorkflowDetail />} />
           <Route path="/workflows/:id/edit" element={<Workflows />} />
+          <Route path="/workflows/:id" element={<WorkflowDetail />} />
           <Route path="/leads" element={<Leads />} />
           <Route path="/campaigns" element={<Campaigns />} />
           <Route path="/dashboard" element={<Analytics />} />

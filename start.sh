@@ -2,7 +2,8 @@
 # =============================================================================
 # OutflowAI — Single Command Startup
 # Usage:
-#   bash start.sh               → start everything
+#   bash start.sh               → start everything (LAN mode)
+#   bash start.sh --ngrok       → start everything + ngrok public tunnel
 #   bash start.sh --no-redis    → skip Redis (if already running)
 #   bash start.sh --no-frontend → skip Vite frontend
 # =============================================================================
@@ -21,10 +22,12 @@ mkdir -p "$LOG_DIR"
 # ── Flags ────────────────────────────────────────────────────────────────────
 START_REDIS=true
 START_FRONTEND=true
+USE_NGROK=false
 for arg in "$@"; do
   case $arg in
     --no-redis)    START_REDIS=false ;;
     --no-frontend) START_FRONTEND=false ;;
+    --ngrok)       USE_NGROK=true ;;
   esac
 done
 
@@ -65,9 +68,26 @@ cleanup() {
   for pid in "${PIDS[@]}"; do
     kill "$pid" 2>/dev/null && echo "  killed PID $pid"
   done
+  # Kill ngrok if we started it
+  if $USE_NGROK; then
+    pkill -f "ngrok http" 2>/dev/null && echo "  killed ngrok"
+  fi
   log "All services stopped. Bye!"
 }
 trap cleanup EXIT INT TERM
+
+# ── Detect LAN IP ────────────────────────────────────────────────────────────
+LAN_IP=$(python -c "
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+try:
+    s.connect(('8.8.8.8', 80))
+    print(s.getsockname()[0])
+except Exception:
+    print('127.0.0.1')
+finally:
+    s.close()
+" 2>/dev/null || echo "127.0.0.1")
 
 # ── Banner ───────────────────────────────────────────────────────────────────
 echo ""
@@ -147,28 +167,88 @@ PIDS+=($!)
 wait_for_port 3000 "WhatsApp service" || warn "WhatsApp service failed — check .logs/whatsapp-service.log"
 cd "$ROOT_DIR"
 
-# ── 7. Frontend (Vite) on :5173 ───────────────────────────────────────────────
+# ── 7. Collab Server (y-websocket / Yjs) on :4000 ─────────────────────────────
+log "Starting Collab server (Yjs) on :4000..."
+cd "$ROOT_DIR/services/collab-server"
+if [ ! -d "node_modules" ]; then
+  npm install --silent 2>/dev/null
+fi
+PORT=4000 node server.js >"$LOG_DIR/collab-server.log" 2>&1 &
+PIDS+=($!)
+wait_for_port 4000 "Collab server" || warn "Collab server failed — check .logs/collab-server.log"
+cd "$ROOT_DIR"
+
+# ── 8. Ngrok tunnel (optional) ────────────────────────────────────────────────
+NGROK_URL=""
+if $USE_NGROK; then
+  log "Starting ngrok tunnel for backend :8000..."
+  if command -v ngrok &>/dev/null; then
+    ngrok http 8000 --log=stdout >"$LOG_DIR/ngrok.log" 2>&1 &
+    PIDS+=($!)
+    sleep 3
+    # Extract the public URL from ngrok's local API
+    NGROK_URL=$(python -c "
+import json, urllib.request
+try:
+    data = json.loads(urllib.request.urlopen('http://127.0.0.1:4040/api/tunnels').read())
+    for t in data.get('tunnels', []):
+        if t.get('proto') == 'https':
+            print(t['public_url'])
+            break
+except Exception:
+    pass
+" 2>/dev/null || true)
+    if [ -n "$NGROK_URL" ]; then
+      ok "Ngrok tunnel: $NGROK_URL"
+      export VITE_API_URL="$NGROK_URL"
+      # Derive WebSocket URL from ngrok HTTPS URL
+      NGROK_WS="${NGROK_URL/https:/wss:}"
+      export VITE_API_WS_URL="$NGROK_WS"
+    else
+      warn "Could not read ngrok URL — check .logs/ngrok.log"
+    fi
+  else
+    warn "ngrok not found — install from https://ngrok.com/download"
+    warn "Skipping tunnel, using LAN access only"
+  fi
+fi
+
+# ── 9. Frontend (Vite) on :5173 ───────────────────────────────────────────────
 if $START_FRONTEND; then
-  log "Starting Frontend (Vite) on :5173..."
+  log "Starting Frontend (Vite) on :5173 (--host)..."
   cd "$ROOT_DIR/client"
-  npm run dev -- --host >"$LOG_DIR/frontend.log" 2>&1 &
+  npm run dev >"$LOG_DIR/frontend.log" 2>&1 &
   PIDS+=($!)
   wait_for_port 5173 "Frontend"
   cd "$ROOT_DIR"
 fi
 
-# ── 8. Summary ────────────────────────────────────────────────────────────────
+# ── 10. Summary ───────────────────────────────────────────────────────────────
 echo ""
-echo -e "${BOLD}╔══════════════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}║              Service URLs                        ║${NC}"
-echo -e "${BOLD}╠══════════════════════════════════════════════════╣${NC}"
-echo -e " ${GREEN}Frontend${NC}      →  http://localhost:5173"
-echo -e " ${GREEN}Backend API${NC}   →  http://localhost:8000"
-echo -e " ${GREEN}Swagger Docs${NC}  →  http://localhost:8000/docs"
-echo -e " ${GREEN}WhatsApp Svc${NC}  →  http://localhost:3000"
-echo -e " ${GREEN}LinkedIn Svc${NC}  →  http://localhost:3001"
-echo -e " ${GREEN}Email Svc${NC}     →  http://localhost:3002"
-echo -e "${BOLD}╚══════════════════════════════════════════════════╝${NC}"
+echo -e "${BOLD}╔══════════════════════════════════════════════════════╗${NC}"
+echo -e "${BOLD}║                  Service URLs                        ║${NC}"
+echo -e "${BOLD}╠══════════════════════════════════════════════════════╣${NC}"
+echo -e " ${GREEN}Frontend${NC}       →  http://localhost:5173"
+echo -e " ${GREEN}Frontend (LAN)${NC} →  http://${LAN_IP}:5173"
+echo -e " ${GREEN}Backend API${NC}    →  http://localhost:8000"
+echo -e " ${GREEN}Backend (LAN)${NC}  →  http://${LAN_IP}:8000"
+echo -e " ${GREEN}Swagger Docs${NC}   →  http://localhost:8000/docs"
+echo -e " ${GREEN}Collab Server${NC}  →  ws://${LAN_IP}:4000"
+echo -e " ${GREEN}WhatsApp Svc${NC}   →  http://localhost:3000"
+echo -e " ${GREEN}LinkedIn Svc${NC}   →  http://localhost:3001"
+echo -e " ${GREEN}Email Svc${NC}      →  http://localhost:3002"
+if [ -n "$NGROK_URL" ]; then
+echo -e "${BOLD}╠══════════════════════════════════════════════════════╣${NC}"
+echo -e " ${CYAN}Ngrok (Public)${NC} →  ${NGROK_URL}"
+echo -e " ${CYAN}Ngrok WS${NC}       →  ${NGROK_WS}"
+fi
+echo -e "${BOLD}╚══════════════════════════════════════════════════════╝${NC}"
+echo ""
+echo -e "  ${YELLOW}Multi-device access:${NC}"
+echo -e "    Open ${BOLD}http://${LAN_IP}:5173${NC} on other devices on the same network"
+if [ -n "$NGROK_URL" ]; then
+echo -e "    Or share ${BOLD}${NGROK_URL}${NC} for public internet access"
+fi
 echo ""
 echo -e "  Logs:  tail -f ${CYAN}.logs/backend.log${NC}"
 echo ""

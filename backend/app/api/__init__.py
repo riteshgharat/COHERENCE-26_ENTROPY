@@ -8,6 +8,7 @@ from app.api.channels import router as channels_router
 from app.api.analytics import router as analytics_router
 from app.api.ai import router as ai_router
 from app.api.campaigns import router as campaigns_router
+from app.api.collab import router as collab_router
 
 __all__ = [
     "leads_router",
@@ -16,4 +17,5 @@ __all__ = [
     "analytics_router",
     "ai_router",
     "campaigns_router",
+    "collab_router",
 ]

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { API_URL } from '@/lib/api';
 import { Wand2, X, ChevronRight, Loader2, Sparkles, AlertCircle, Cpu, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getDefaultData } from '@/components/workflow/nodeDefinitions';
@@ -174,7 +175,7 @@ export default function AgenticWorkflowModal({ onGenerate, onClose }: Props) {
     }, 900);
 
     try {
-      const res = await fetch('http://localhost:8000/api/v1/ai/generate-workflow', {
+      const res = await fetch(`${API_URL}/api/v1/ai/generate-workflow`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: prompt.trim(), provider }),

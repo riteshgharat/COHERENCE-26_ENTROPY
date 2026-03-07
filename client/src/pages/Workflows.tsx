@@ -1,5 +1,6 @@
 import { useCallback, useRef, useMemo, useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { API_URL } from '@/lib/api';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ReactFlow,
   Background,
@@ -43,6 +44,7 @@ import {
   Send,
   Loader2,
   Wand2,
+  Users,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import BaseNode from '@/components/workflow/BaseNode';
@@ -50,6 +52,11 @@ import DeletableEdge from '@/components/workflow/DeletableEdge';
 import NodePropertyPanel from '@/components/workflow/NodePropertyPanel';
 import AgenticWorkflowModal from '@/components/workflow/AgenticWorkflowModal';
 import { getDefaultData } from '@/components/workflow/nodeDefinitions';
+import { useYjsCollaboration } from '@/hooks/useYjsCollaboration';
+import { useCollabWebSocket } from '@/hooks/useCollabWebSocket';
+import CollaborationBar from '@/components/workflow/CollaborationBar';
+import CollaboratorCursors, { CursorTracker } from '@/components/workflow/CollaboratorCursors';
+import CollabTeamModal from '@/components/workflow/CollabTeamModal';
 
 const nodeTypes = {
   start: BaseNode,
@@ -57,6 +64,7 @@ const nodeTypes = {
   lead_upload: BaseNode,
   ai_message: BaseNode,
   send_message: BaseNode,
+  delay: BaseNode,
   reply_check: BaseNode,
   follow_up: BaseNode,
   update_crm: BaseNode,
@@ -157,8 +165,13 @@ let nodeIdCounter = 10;
 export default function WorkflowEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const isNew = !id || id === 'new';
+  const isMockId = id?.startsWith('tpl-') || id?.startsWith('wf-') || id === 'edit';
+
+  // Pick up collab session passed via navigation state (from WorkflowsPage)
+  const navCollabSession = (location.state as { collabSession?: { id: string; invite_code: string; name: string } } | null)?.collabSession ?? null;
 
   const [nodes, setNodes, onNodesChange] = useNodesState(isNew ? [] : defaultNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(isNew ? [] : defaultEdges);
@@ -170,10 +183,86 @@ export default function WorkflowEditor() {
   const [activeTab, setActiveTab] = useState<'nodes' | 'config'>('nodes');
   const [running, setRunning] = useState(false);
   const [showAgenticModal, setShowAgenticModal] = useState(false);
+  const [showCollabModal, setShowCollabModal] = useState(false);
+  const [collabEnabled, setCollabEnabled] = useState(!isNew || !!navCollabSession);
+  const [collabSession, setCollabSession] = useState<{ id: string; invite_code: string; name: string } | null>(navCollabSession);
+  const [collabUsername] = useState(() => {
+    let name = sessionStorage.getItem('collab-username');
+    if (!name) {
+      name = `User-${Math.random().toString(36).slice(2, 6)}`;
+      sessionStorage.setItem('collab-username', name);
+    }
+    return name;
+  });
+
+  // ── Collaboration ──
+  const nodesRef = useRef<Node[]>(nodes);
+  nodesRef.current = nodes;
+  const edgesRef = useRef<Edge[]>(edges);
+  edgesRef.current = edges;
+
+  const {
+    collaborators,
+    connected: collabConnected,
+    synced: collabSynced,
+    syncNodes,
+    syncEdges,
+    initializeFromData,
+    updateCursor,
+    updateSelectedNode,
+  } = useYjsCollaboration(id, collabEnabled && !isNew && !isMockId, setNodes, setEdges);
+
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleSync = useCallback(() => {
+    if (!collabConnected) return;
+    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+    syncTimeoutRef.current = setTimeout(() => {
+      syncNodes(nodesRef.current);
+      syncEdges(edgesRef.current);
+    }, 50);
+  }, [collabConnected, syncNodes, syncEdges]);
+
+  // Initialize Yjs from API-loaded data once synced
+  useEffect(() => {
+    if (collabSynced && !isNew && id) {
+      initializeFromData(nodesRef.current, edgesRef.current);
+    }
+  }, [collabSynced, isNew, id, initializeFromData]);
+
+  // ── Live Save WebSocket ──
+  const { activities, wsConnected, sendSave, sendActivity } = useCollabWebSocket(
+    id,
+    collabEnabled && !isNew && !isMockId,
+    collabUsername,
+    (flowData) => {
+      // Another user saved — refresh from server
+      if (flowData.nodes) setNodes(flowData.nodes as Node[]);
+      if (flowData.edges) setEdges(flowData.edges as Edge[]);
+    },
+  );
+
+  // Auto-save every 30s when collaboration is active
+  useEffect(() => {
+    if (!collabConnected || isNew || !id) return;
+    const interval = setInterval(async () => {
+      try {
+        await fetch(`${API_URL}/api/v1/workflows/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: workflowName,
+            flow_data: { nodes: nodesRef.current, edges: edgesRef.current },
+          }),
+        });
+        sendSave({ nodes: nodesRef.current, edges: edgesRef.current });
+      } catch { /* silent */ }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [collabConnected, isNew, id, workflowName, sendSave]);
 
   useEffect(() => {
-    if (!isNew && id && id !== 'new') {
-      fetch(`http://localhost:8000/api/v1/workflows/${id}`)
+    if (!isNew && id && id !== 'new' && !isMockId) {
+      fetch(`${API_URL}/api/v1/workflows/${id}`)
         .then((res) => {
           if (!res.ok) throw new Error('Failed to fetch workflow');
           return res.json();
@@ -187,13 +276,13 @@ export default function WorkflowEditor() {
         })
         .catch(console.error);
     }
-  }, [id, isNew, setNodes, setEdges]);
+  }, [id, isNew, isMockId, setNodes, setEdges]);
 
   const toggleGroup = (label: string) =>
     setCollapsedGroups((p) => ({ ...p, [label]: !p[label] }));
 
   const onConnect = useCallback(
-    (connection: Connection) =>
+    (connection: Connection) => {
       setEdges((eds) =>
         addEdge(
           {
@@ -204,19 +293,23 @@ export default function WorkflowEditor() {
           },
           eds,
         ),
-      ),
-    [setEdges],
+      );
+      scheduleSync();
+    },
+    [setEdges, scheduleSync],
   );
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     setSelectedNodeId(node.id);
     setActiveTab('config');
-  }, []);
+    updateSelectedNode(node.id);
+  }, [updateSelectedNode]);
 
   const onPaneClick = useCallback(() => {
     setSelectedNodeId(null);
     setActiveTab('nodes');
-  }, []);
+    updateSelectedNode(null);
+  }, [updateSelectedNode]);
 
   const onDragStart = (e: React.DragEvent, item: ToolItem) => {
     e.dataTransfer.setData('application/reactflow-type', item.type);
@@ -249,8 +342,9 @@ export default function WorkflowEditor() {
         data: { ...defaults, ...extraData },
       };
       setNodes((nds) => [...nds, newNode]);
+      scheduleSync();
     },
-    [setNodes],
+    [setNodes, scheduleSync],
   );
 
   const deleteNode = useCallback(() => {
@@ -259,7 +353,8 @@ export default function WorkflowEditor() {
     setEdges((eds) => eds.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId));
     setSelectedNodeId(null);
     setActiveTab('nodes');
-  }, [selectedNodeId, setNodes, setEdges]);
+    scheduleSync();
+  }, [selectedNodeId, setNodes, setEdges, scheduleSync]);
 
   const handleSave = async () => {
     try {
@@ -269,8 +364,8 @@ export default function WorkflowEditor() {
       };
 
       const endpoint = isNew
-        ? 'http://localhost:8000/api/v1/workflows/'
-        : `http://localhost:8000/api/v1/workflows/${id}`;
+        ? `${API_URL}/api/v1/workflows/`
+        : `${API_URL}/api/v1/workflows/${id}`;
 
       const method = isNew ? 'POST' : 'PATCH';
 
@@ -282,6 +377,12 @@ export default function WorkflowEditor() {
 
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+
+      // Broadcast save to collaborators
+      if (collabEnabled && !isNew) {
+        sendSave({ nodes, edges });
+        sendActivity('saved the workflow');
+      }
 
       if (isNew || id === 'new') {
         // Optional: redirect to list or the new ID. We'll just stay to not break flows.
@@ -296,6 +397,7 @@ export default function WorkflowEditor() {
     setNodes((nds) =>
       nds.map((n) => (n.id === selectedNodeId ? { ...n, data: { ...n.data, [key]: value } } : n)),
     );
+    scheduleSync();
   };
 
   const handleAgenticGenerate = useCallback(
@@ -307,8 +409,9 @@ export default function WorkflowEditor() {
       setEdges(generatedEdges);
       if (name) setWorkflowName(name);
       setShowAgenticModal(false);
+      scheduleSync();
     },
-    [setNodes, setEdges],
+    [setNodes, setEdges, scheduleSync],
   );
 
   const runWorkflow = useCallback(async () => {
@@ -349,14 +452,30 @@ export default function WorkflowEditor() {
       const nodeType = nodes.find(n => n.id === nodeId)?.type;
 
       markNode(nodeId, { _executing: true, _done: false });
-      
+
       try {
         if (nodeType === 'lead_upload' || nodeType === 'sheets_import') {
           const storeInDb = nodeData.store_in_db !== 'no';
-          
+
+          if (nodeType === 'sheets_import' && nodeData.spreadsheet_id) {
+            // Import leads from Google Sheets via backend
+            const res = await fetch(`${API_URL}/api/v1/leads/import-sheets`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                spreadsheet_id: nodeData.spreadsheet_id,
+                worksheet_name: nodeData.worksheet_name || 'Sheet1',
+              }),
+            });
+            if (res.ok) {
+              const importData = await res.json();
+              console.log(`Sheets import: ${importData.total_imported} imported, ${importData.total_skipped} skipped`);
+            }
+          }
+
+          // Fetch leads from backend (includes any just-imported)
           if (storeInDb) {
-            // Fetch leads from backend
-            const res = await fetch('http://localhost:8000/api/v1/leads/?page_size=10');
+            const res = await fetch(`${API_URL}/api/v1/leads/?page_size=10`);
             if (res.ok) {
               const data = await res.json();
               currentLeads = data.leads || [];
@@ -374,12 +493,12 @@ export default function WorkflowEditor() {
         else if (nodeType === 'ai_message') {
           // Generate a preview message via backend AI endpoint
           if (currentLeads.length > 0) {
-            const res = await fetch('http://localhost:8000/api/v1/ai/preview-message', {
+            const res = await fetch(`${API_URL}/api/v1/ai/preview-message`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                lead_data: currentLeads[0], 
-                tone: nodeData.tone, 
+                lead_data: currentLeads[0],
+                tone: nodeData.tone,
                 sample_message: nodeData.sample_message,
                 provider: nodeData.provider
               })
@@ -395,7 +514,7 @@ export default function WorkflowEditor() {
           // Send message to microservices based on channel
           const isWhatsApp = nodeData.channel === 'whatsapp';
           const isEmail = nodeData.channel === 'email';
-          
+
           if (isWhatsApp || isEmail) {
             const port = isWhatsApp ? 3000 : 3002;
             const payload = {
@@ -404,7 +523,7 @@ export default function WorkflowEditor() {
               message: generatedMessage || nodeData.subject || 'Hello',
               backendUrl: 'http://127.0.0.1:8000'
             };
-            
+
             await fetch(`http://localhost:${port}/broadcast`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -441,18 +560,18 @@ export default function WorkflowEditor() {
       markNode(nodeId, { _executing: false, _done: true });
 
       const targets = adj.get(nodeId) || [];
-      
+
       // Node branching
       if (nodeType === 'reply_check') {
-         // Randomly decide yes or no for the demo
-         const handle = Math.random() > 0.5 ? 'yes' : 'no';
-         const branchingEdges = edges.filter(e => e.source === nodeId && e.sourceHandle === handle);
-         const targetNodes = branchingEdges.map(e => e.target);
-         queue.push(...targetNodes.filter((t) => !visited.has(t)));
+        // Randomly decide yes or no for the demo
+        const handle = Math.random() > 0.5 ? 'yes' : 'no';
+        const branchingEdges = edges.filter(e => e.source === nodeId && e.sourceHandle === handle);
+        const targetNodes = branchingEdges.map(e => e.target);
+        queue.push(...targetNodes.filter((t) => !visited.has(t)));
       } else {
-         queue.push(...targets.filter((t) => !visited.has(t)));
+        queue.push(...targets.filter((t) => !visited.has(t)));
       }
-      
+
     }
 
     // Clear done state after a brief pause
@@ -498,6 +617,32 @@ export default function WorkflowEditor() {
           <span className="text-[11px] text-muted-foreground hidden sm:block pr-2">
             {nodes.length} nodes · {edges.length} connections
           </span>
+
+          {!isNew && (
+            <CollaborationBar
+              enabled={collabEnabled}
+              connected={collabConnected}
+              collaborators={collaborators}
+              workflowId={id}
+              onToggle={() => setCollabEnabled((v) => !v)}
+            />
+          )}
+
+          {!isNew && id && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 h-8 text-xs font-medium rounded-lg border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900/50 dark:text-blue-400"
+              onClick={() => setShowCollabModal(true)}
+              disabled={isMockId}
+              title={isMockId ? "Collaboration is only available for saved workflows" : ""}
+            >
+              <Users size={11} />
+              {collabSession ? 'Team' : 'Collab'}
+            </Button>
+          )}
+
+          <div className="h-4 w-px bg-border shrink-0" />
 
           <Button
             variant="outline"
@@ -623,8 +768,8 @@ export default function WorkflowEditor() {
           <ReactFlow
             nodes={nodes}
             edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+            onNodesChange={(changes) => { onNodesChange(changes); scheduleSync(); }}
+            onEdgesChange={(changes) => { onEdgesChange(changes); scheduleSync(); }}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
@@ -650,6 +795,8 @@ export default function WorkflowEditor() {
               nodeColor="oklch(0.4 0 0)"
               maskColor="oklch(0.15 0 0 / 0.3)"
             />
+            {collabEnabled && !isNew && <CollaboratorCursors collaborators={collaborators} />}
+            {collabEnabled && !isNew && <CursorTracker onCursorMove={updateCursor} enabled={collabConnected} />}
           </ReactFlow>
 
           {/* ── Empty state (only for /workflows/new) ── */}
@@ -691,6 +838,44 @@ export default function WorkflowEditor() {
           onGenerate={handleAgenticGenerate}
           onClose={() => setShowAgenticModal(false)}
         />
+      )}
+
+      {showCollabModal && id && (
+        <CollabTeamModal
+          workflowId={id}
+          username={collabUsername}
+          onClose={() => setShowCollabModal(false)}
+          onSessionJoined={(session) => {
+            setCollabSession(session);
+            setCollabEnabled(true);
+            setShowCollabModal(false);
+          }}
+        />
+      )}
+
+      {/* ── Activity Feed (bottom-right toast) ── */}
+      {collabEnabled && activities.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-40 flex flex-col gap-1 max-w-[280px]">
+          {activities.slice(-3).map((a, i) => (
+            <div
+              key={`${a.timestamp}-${i}`}
+              className="bg-card border border-border rounded-lg px-3 py-2 shadow-lg text-[11px] text-muted-foreground animate-fade-in"
+            >
+              {a.type === 'user_joined' && (
+                <span><span className="font-semibold text-foreground">{a.username}</span> joined</span>
+              )}
+              {a.type === 'user_left' && (
+                <span><span className="font-semibold text-foreground">{a.username}</span> left</span>
+              )}
+              {a.type === 'activity' && (
+                <span><span className="font-semibold text-foreground">{a.username}</span> {a.action}</span>
+              )}
+              {a.type === 'workflow_updated' && (
+                <span><span className="font-semibold text-foreground">{a.username}</span> saved changes</span>
+              )}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

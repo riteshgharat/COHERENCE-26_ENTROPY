@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
+import { API_URL } from '@/lib/api';
+import ReactMarkdown from 'react-markdown';
 import {
   Send,
   Sparkles,
@@ -17,6 +19,45 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+}
+
+// ── General Q&A knowledge base ──
+const GENERAL_QA: { pattern: RegExp; answer: string }[] = [
+  {
+    pattern: /what (is|are|does) (this|the) (tool|platform|app|system)/i,
+    answer: `## About This Platform\n\nThis is an **AI-powered outreach automation platform** that helps you:\n\n- **Import leads** from CSV, Excel, or Google Sheets\n- **Build workflows** with visual drag-and-drop nodes\n- **Send multi-channel messages** via Email, LinkedIn & WhatsApp\n- **Track analytics** on opens, replies and conversions\n- **Use AI** to draft personalised messages and optimise campaigns\n\n> Think of it as your intelligent sales co-pilot.`,
+  },
+  {
+    pattern: /how (do i|to|can i) (start|begin|create|set ?up)/i,
+    answer: `## Getting Started\n\n1. **Import Leads** — Go to the Leads page and upload a CSV/Excel file or connect Google Sheets\n2. **Create a Workflow** — Head to Workflows, pick a template or start from scratch\n3. **Configure Nodes** — Add message nodes (Email / LinkedIn / WhatsApp) and set delays\n4. **Run the Workflow** — Hit *Execute* to start your outreach sequence\n5. **Monitor Results** — Check the Analytics dashboard for live stats\n\n> **Tip:** Start with a small batch (50–100 leads) to test your messaging before scaling.`,
+  },
+  {
+    pattern: /what (channels?|platforms?) (are|do you) support/i,
+    answer: `## Supported Channels\n\n| Channel | Status | Best For |\n|---------|--------|----------|\n| **Email** | ✅ Full support | Cold outreach at scale |\n| **LinkedIn** | ✅ Full support | Professional B2B outreach |\n| **WhatsApp** | ✅ Full support | High-engagement follow-ups |\n\nYou can combine channels in a single workflow for **multi-touch sequences**.`,
+  },
+  {
+    pattern: /how (does|do) (the )?ai|what can (the )?ai do/i,
+    answer: `## AI Capabilities\n\n- **Message Generation** — Draft personalised cold emails, LinkedIn messages and WhatsApp texts based on lead data\n- **Conversation Replies** — AI generates context-aware follow-up replies when leads respond\n- **Workflow Suggestions** — Describe your campaign goal and AI builds a full workflow with nodes and timing\n- **Performance Analysis** — Ask me about your stats and I'll provide data-driven insights\n\nAll AI features use **Groq** or **Gemini** as the language model provider.`,
+  },
+  {
+    pattern: /what (is|are) (a )?workflow|how (does|do) workflow/i,
+    answer: `## Workflows\n\nA workflow is a **visual automation pipeline** that defines your outreach sequence:\n\n- **Trigger Node** — Starts the flow (e.g., new lead imported)\n- **Message Nodes** — Send via Email, LinkedIn, or WhatsApp\n- **Delay Nodes** — Wait hours or days between steps\n- **Condition Nodes** — Branch based on lead status or replies\n- **AI Nodes** — Generate dynamic message content\n\nWorkflows execute automatically once started, processing each lead through the pipeline.`,
+  },
+  {
+    pattern: /how (do i|to|can i) import|upload (leads?|csv|excel|data)/i,
+    answer: `## Importing Leads\n\n### From CSV / Excel\n1. Go to **Leads** page\n2. Click **Import** and drop your file\n3. The system auto-maps columns (name, email, company, industry, etc.)\n4. Duplicates are skipped based on email address\n\n### From Google Sheets\n1. Add a **Sheets Import** node in your workflow\n2. Paste the Sheet URL and configure column mapping\n3. Run the workflow — leads sync automatically\n\n> Supported formats: **.csv**, **.xlsx**, **.xls**`,
+  },
+  {
+    pattern: /help|what can (you|i) (do|ask)/i,
+    answer: `## What I Can Help With\n\n- **Campaign Performance** — "How is my campaign performing?"\n- **Channel Analysis** — "Which channels have the best response rate?"\n- **Message Tips** — "How can I improve my outreach messaging?"\n- **Workflow Suggestions** — "Suggest a workflow for SaaS founders"\n- **Platform Help** — "How do I import leads?" / "What channels are supported?"\n- **AI Features** — "What can the AI do?"\n\nJust type your question and I'll do my best to help!`,
+  },
+];
+
+function matchGeneralQA(text: string): string | null {
+  for (const qa of GENERAL_QA) {
+    if (qa.pattern.test(text)) return qa.answer;
+  }
+  return null;
 }
 
 const suggestedQueries = [
@@ -61,12 +102,27 @@ export default function AIChat() {
     setInput('');
     setIsTyping(true);
 
+    // Artificial thinking delay (5-10 seconds)
+    const delay = 5000 + Math.random() * 5000;
+    await new Promise((r) => setTimeout(r, delay));
+
+    // Check general Q&A first
+    const qaAnswer = matchGeneralQA(message);
+    if (qaAnswer) {
+      setMessages((prev) => [
+        ...prev,
+        { id: updatedMessages.length, role: 'assistant', content: qaAnswer, timestamp: 'Just now' },
+      ]);
+      setIsTyping(false);
+      return;
+    }
+
     try {
       const chatHistory = updatedMessages
         .filter(m => m.id > 0) // skip initial greeting
         .map(m => ({ role: m.role, content: m.content }));
 
-      const res = await fetch('http://localhost:8000/api/v1/ai/chat', {
+      const res = await fetch(`${API_URL}/api/v1/ai/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: chatHistory }),
@@ -105,13 +161,17 @@ export default function AIChat() {
               )}
               <div className={`max-w-[75%] ${msg.role === 'user' ? 'order-first' : ''}`}>
                 <div
-                  className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
+                  className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                     msg.role === 'user'
-                      ? 'bg-primary text-primary-foreground rounded-br-md'
-                      : 'bg-muted rounded-bl-md'
+                      ? 'bg-primary text-primary-foreground rounded-br-md whitespace-pre-wrap'
+                      : 'bg-muted rounded-bl-md prose prose-sm prose-invert max-w-none [&_table]:text-xs [&_th]:px-2 [&_td]:px-2 [&_th]:py-1 [&_td]:py-1'
                   }`}
                 >
-                  {msg.content}
+                  {msg.role === 'assistant' ? (
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  ) : (
+                    msg.content
+                  )}
                 </div>
                 <span className="text-[10px] text-muted-foreground mt-1 block px-1">{msg.timestamp}</span>
               </div>

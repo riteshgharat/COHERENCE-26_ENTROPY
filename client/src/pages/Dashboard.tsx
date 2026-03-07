@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_URL } from '@/lib/api';
 import {
   Users,
   Megaphone,
@@ -49,7 +50,7 @@ export default function Dashboard() {
   const [channelPerformance, setChannelPerformance] = useState<any>({});
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/v1/analytics/dashboard')
+    fetch(`${API_URL}/api/v1/analytics/dashboard`)
       .then(res => res.json())
       .then(data => {
         setDisplayStats([

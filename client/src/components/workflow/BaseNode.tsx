@@ -1,4 +1,5 @@
 import { memo, useCallback, useRef, useState } from 'react';
+import { API_URL } from '@/lib/api';
 import {
   Handle,
   Position,
@@ -33,14 +34,38 @@ function LeadUploadZone({
   onChange: (name: string) => void;
 }) {
   const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState<{ imported: number; skipped: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const uploadFile = async (file: File) => {
+    setUploading(true);
+    setResult(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_URL}/api/v1/leads/import`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Import failed');
+      setResult({ imported: data.total_imported, skipped: data.total_skipped });
+      onChange(file.name);
+    } catch (err: any) {
+      setResult({ imported: 0, skipped: -1 });
+      console.error('Lead import failed:', err);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragging(false);
     const file = e.dataTransfer.files[0];
-    if (file) onChange(file.name);
+    if (file) uploadFile(file);
   };
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -49,7 +74,7 @@ function LeadUploadZone({
   };
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) onChange(file.name);
+    if (file) uploadFile(file);
   };
 
   return (
@@ -75,10 +100,24 @@ function LeadUploadZone({
       />
       <div className="flex flex-col items-center gap-1 py-3 px-2 text-center">
         <Upload size={14} className={value ? 'text-amber-500' : 'text-muted-foreground/50'} />
-        {value ? (
-          <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 truncate max-w-[180px]">
-            {value}
+        {uploading ? (
+          <span className="text-[10px] font-semibold text-amber-600 animate-pulse">
+            Uploading & importing…
           </span>
+        ) : value ? (
+          <>
+            <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 truncate max-w-[180px]">
+              {value}
+            </span>
+            {result && result.skipped >= 0 && (
+              <span className="text-[9px] text-emerald-600 dark:text-emerald-400">
+                {result.imported} imported, {result.skipped} skipped
+              </span>
+            )}
+            {result && result.skipped < 0 && (
+              <span className="text-[9px] text-red-500">Upload failed</span>
+            )}
+          </>
         ) : (
           <>
             <span className="text-[10px] font-semibold text-muted-foreground">

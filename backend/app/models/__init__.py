@@ -7,6 +7,7 @@ from app.models.workflow import Workflow, WorkflowStatus
 from app.models.message import Message, MessageChannel, MessageStatus, MessageDirection
 from app.models.execution import WorkflowExecution, ExecutionStatus
 from app.models.campaign import Campaign, CampaignStatus
+from app.models.collab import CollabSession, CollabMember
 
 __all__ = [
     "Lead",
@@ -21,4 +22,6 @@ __all__ = [
     "ExecutionStatus",
     "Campaign",
     "CampaignStatus",
+    "CollabSession",
+    "CollabMember",
 ]

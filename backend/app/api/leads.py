@@ -89,9 +89,18 @@ async def import_leads(
                 errors.append(f"Row {idx + 1}: missing 'name' field")
                 continue
 
+            # Deduplicate by email
+            email = normalised.get("email")
+            if email:
+                existing = db.query(Lead).filter(Lead.email == email).first()
+                if existing:
+                    skipped += 1
+                    errors.append(f"Row {idx + 1}: duplicate email '{email}'")
+                    continue
+
             lead = Lead(
                 name=str(name),
-                email=normalised.get("email"),
+                email=email,
                 phone=str(normalised["phone"]) if normalised.get("phone") else None,
                 company=normalised.get("company"),
                 industry=normalised.get("industry"),
@@ -183,9 +192,18 @@ async def import_sheets(
                 errors.append(f"Row {idx + 1}: missing 'name' field")
                 continue
 
+            # Deduplicate by email
+            email = normalised.get("email")
+            if email:
+                existing = db.query(Lead).filter(Lead.email == email).first()
+                if existing:
+                    skipped += 1
+                    errors.append(f"Row {idx + 1}: duplicate email '{email}'")
+                    continue
+
             lead = Lead(
                 name=str(name),
-                email=normalised.get("email"),
+                email=email,
                 phone=str(normalised["phone"]) if normalised.get("phone") else None,
                 company=normalised.get("company"),
                 industry=normalised.get("industry"),
@@ -262,3 +280,37 @@ def delete_lead(lead_id: UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Lead not found")
     db.delete(lead)
     db.commit()
+
+
+@router.get("/{lead_id}/messages")
+def get_lead_messages(lead_id: UUID, db: Session = Depends(get_db)):
+    """Return messages for a lead — used for engaged lead summaries."""
+    from app.models.message import Message
+
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    messages = (
+        db.query(Message)
+        .filter(Message.lead_id == lead_id)
+        .order_by(Message.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    return {
+        "lead_id": str(lead_id),
+        "messages": [
+            {
+                "id": str(m.id),
+                "channel": m.channel.value if m.channel else None,
+                "direction": m.direction.value if m.direction else None,
+                "status": m.status.value if m.status else None,
+                "subject": m.subject,
+                "body": m.body,
+                "sent_at": m.sent_at.isoformat() if m.sent_at else None,
+                "created_at": m.created_at.isoformat() if m.created_at else None,
+            }
+            for m in messages
+        ],
+    }
